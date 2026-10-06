@@ -237,6 +237,8 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 			new_front[ni - w] = true
 	a.front = new_front
 	a.zone_cache_valid = false
+	if a.tiles_taken_last_ring > 0:
+		sim.emit_event({"type": "attack_ring", "attacker_id": a.attacker_id, "defender_id": a.defender_id, "tiles": a.tiles_taken_last_ring})
 	a.stalled_rings = 0 if a.tiles_taken_last_ring > 0 else a.stalled_rings + 1
 
 
@@ -375,6 +377,8 @@ static func eliminate_player(sim: Simulation, victim_id: int, capturer_id: int) 
 	if capturer != null:
 		capturer.troops += plunder
 		capturer.crowns_captured += 1
+		if victim.crown_x >= 0:
+			sim.add_popup(state.idx(victim.crown_x, victim.crown_y), "+%s plunder" % GameState.format_int(int(plunder)), capturer_id)
 	# Victim's territory becomes Ruins.
 	for i in range(state.owners.size()):
 		if state.owners[i] == victim_id:
@@ -397,7 +401,7 @@ static func eliminate_player(sim: Simulation, victim_id: int, capturer_id: int) 
 	TerritoryOps.rebuild_borders_for_all(state)
 	var capturer_name: String = capturer.display_name if capturer != null else "An attacker"
 	sim.announce("%s has taken %s's Crown!" % [capturer_name, victim.display_name], 5.0)
-	state.events.append({
+	sim.emit_event({
 		"type": "crown_fall", "victim_id": victim_id, "capturer_id": capturer_id,
 		"plunder": plunder, "x": victim.crown_x, "y": victim.crown_y,
 	})

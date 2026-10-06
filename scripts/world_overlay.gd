@@ -23,6 +23,10 @@ var bombard_preview: Vector2i = Vector2i(-1, -1)
 var bombard_preview_ok: bool = false
 
 var _time: float = 0.0
+# Attack fronts, rebuilt once per sim tick: [colour, segments, mine, rally].
+# Each front tile is one thick line segment, so a whole front is one draw call.
+var _fronts: Array = []
+var _fronts_tick: int = -1
 
 
 func _process(delta: float) -> void:
@@ -34,7 +38,7 @@ func _draw() -> void:
 	if state == null:
 		return
 	_draw_bombards()
-	_draw_rally_fronts()
+	_draw_attack_fronts()
 	_draw_crowns()
 	_draw_shields()
 	_draw_boats()
@@ -85,17 +89,41 @@ func _draw_shields() -> void:
 		draw_arc(c, r * 0.55, -2.4, -1.2, 16, Color(1, 1, 1, 0.45), 0.3)   # glint
 
 
-# Rally: the attacker's fronts glow while the discount is active.
-func _draw_rally_fronts() -> void:
-	var pulse: float = 0.5 + 0.5 * sin(_time * 9.0)
+# Active attack fronts pulse in the attacker's colour (yours and attacks on
+# you pulse harder). Rally: the attacker's fronts glow gold while it's active.
+func _draw_attack_fronts() -> void:
+	if state.tick_count != _fronts_tick:
+		_rebuild_fronts()
+	var pulse: float = 0.5 + 0.5 * sin(_time * 7.0)
+	for f: Array in _fronts:
+		var col: Color = f[0]
+		var involves_me: bool = f[2]
+		if f[3]:
+			col = Color(1.0, 0.78, 0.25)
+		col.a = (0.35 + 0.45 * pulse) if involves_me else (0.15 + 0.25 * pulse)
+		draw_multiline(f[1], col, 1.0)
+
+
+func _rebuild_fronts() -> void:
+	_fronts_tick = state.tick_count
+	_fronts.clear()
 	for a: Attack in state.attacks:
-		var attacker: Player = state.get_player(a.attacker_id)
-		if attacker == null or not AbilitiesOps.is_rally_active(attacker, state.match_time):
+		if a.front.is_empty():
 			continue
-		var col := Color(1.0, 0.78, 0.25, 0.45 + 0.35 * pulse)
+		var attacker: Player = state.get_player(a.attacker_id)
+		if attacker == null:
+			continue
+		var segs := PackedVector2Array()
+		segs.resize(a.front.size() * 2)
+		var n: int = 0
 		for ti: int in a.front.keys():
 			var t: Vector2i = state.idx_to_xy(ti)
-			draw_rect(Rect2(Vector2(t) - Vector2(0.15, 0.15), Vector2(1.3, 1.3)), col)
+			segs[n] = Vector2(t.x, t.y + 0.5)
+			segs[n + 1] = Vector2(t.x + 1.0, t.y + 0.5)
+			n += 2
+		var mine: bool = a.attacker_id == local_player_id or a.defender_id == local_player_id
+		var rally: bool = AbilitiesOps.is_rally_active(attacker, state.match_time)
+		_fronts.append([Palette.player(a.attacker_id).lightened(0.45), segs, mine, rally])
 
 
 # Bombard: cracked ground and a ring around the area while it lasts.
@@ -136,7 +164,7 @@ func _draw_boats() -> void:
 		var a: Vector2i = state.idx_to_xy(b.path[i])
 		var n: Vector2i = state.idx_to_xy(b.path[i + 1])
 		var pos: Vector2 = Vector2(a).lerp(Vector2(n), f) + Vector2(0.5, 0.5)
-		var col: Color = Balance.color_for_player(b.owner_id)
+		var col: Color = Palette.player(b.owner_id)
 		if b.owner_id == local_player_id:
 			# Show our own boat's remaining route.
 			var route := PackedVector2Array([pos])

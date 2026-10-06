@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/map.gd" id="2_map"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/camera_rig.gd" id="4_cam"]
 [ext_resource type="Script" path="res://scripts/world_overlay.gd" id="5_overlay"]
+[ext_resource type="Script" path="res://scripts/game_feel.gd" id="6_feel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_game")
@@ -20,3 +21,6 @@ script = ExtResource("5_overlay")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("3_hud")
+
+[node name="GameFeel" type="Node" parent="."]
+script = ExtResource("6_feel")

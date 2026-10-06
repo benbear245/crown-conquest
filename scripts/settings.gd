@@ -14,6 +14,8 @@ var vibration: bool = true
 var colorblind: bool = false
 # First-time hints already shown (hint id -> true).
 var hints_seen: Dictionary = {}
+# Vibrations actually sent (used by the smoke tests).
+var vibrations_sent: int = 0
 
 
 func _ready() -> void:
@@ -67,4 +69,5 @@ func reset_hints() -> void:
 # Vibrate only if the player allows it.
 func vibrate(ms: int = 60) -> void:
 	if vibration:
+		vibrations_sent += 1
 		Input.vibrate_handheld(ms)

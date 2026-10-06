@@ -85,6 +85,16 @@ static func format_time(seconds: float) -> String:
 	return "%d:%02d" % [mm, ss]
 
 
+# 1240 -> "1,240"
+static func format_int(n: int) -> String:
+	var s: String = str(absi(n))
+	var out: String = ""
+	while s.length() > 3:
+		out = "," + s.right(3) + out
+		s = s.left(s.length() - 3)
+	return ("-" if n < 0 else "") + s + out
+
+
 func is_final_siege() -> bool:
 	return match_time >= Balance.FINAL_SIEGE_START_SEC
 

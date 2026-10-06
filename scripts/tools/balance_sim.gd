@@ -23,7 +23,7 @@ const SAMPLE_LEADER_AT_SEC: float = 180.0
 
 
 func _ready() -> void:
-	var opts: Dictionary = _parse_args(OS.get_cmdline_args())
+	var opts: Dictionary = _parse_args(OS.get_cmdline_args() + OS.get_cmdline_user_args())
 	var results: Array = []
 	var hard_results: Array = []
 	if opts.jobs > 1 and opts.merge == "":

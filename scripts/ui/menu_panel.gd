@@ -1,12 +1,12 @@
 class_name MenuPanel
 extends PanelContainer
 
-# In-match menu: layout options and a fresh map. (The full pause menu and
-# settings screen come with the menus.)
+# In-match menu: settings (layout, sound, music, vibration, colour-blind)
+# and a fresh map. (The full pause menu comes with the menus.)
 
 signal new_map_pressed
 
-var _hand_button: Button
+var settings_list: SettingsList
 
 
 func _ready() -> void:
@@ -16,10 +16,8 @@ func _ready() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	add_child(vbox)
 	vbox.add_child(UIStyle.label("Menu", UIStyle.FONT_LARGE))
-	_hand_button = UIStyle.button("", 360)
-	_hand_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hand_button.pressed.connect(func() -> void: Settings.set_value("left_handed", not Settings.left_handed); _refresh())
-	vbox.add_child(_hand_button)
+	settings_list = SettingsList.new(360)
+	vbox.add_child(settings_list)
 	var hints := UIStyle.button("Show tips again", 360)
 	hints.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hints.pressed.connect(func() -> void: Settings.reset_hints(); visible = false)
@@ -32,13 +30,8 @@ func _ready() -> void:
 	close.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	close.pressed.connect(func() -> void: visible = false)
 	vbox.add_child(close)
-	_refresh()
 
 
 func open() -> void:
-	_refresh()
+	settings_list.refresh()
 	visible = true
-
-
-func _refresh() -> void:
-	_hand_button.text = "Layout: %s-handed" % ("Left" if Settings.left_handed else "Right")

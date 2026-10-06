@@ -87,8 +87,10 @@ static func cost_label(ability_id: int) -> String:
 	return "Free"
 
 
-static func _count_use(p: Player, ability_id: int) -> void:
+static func _count_use(p: Player, ability_id: int, sim: Simulation = null) -> void:
 	p.abilities_used[ability_id] = int(p.abilities_used.get(ability_id, 0)) + 1
+	if sim != null:
+		sim.emit_event({"type": "ability", "player_id": p.id, "ability": ability_id})
 
 
 static func crown_shield_cooldown_sec(p: Player) -> float:
@@ -140,7 +142,7 @@ static func activate_swift_march(sim: Simulation, p: Player) -> bool:
 		return false
 	p.swift_march_until = now + Balance.SWIFT_MARCH_DURATION_SEC
 	p.swift_march_cd_until = now + Balance.SWIFT_MARCH_COOLDOWN_SEC
-	_count_use(p, ID_SWIFT_MARCH)
+	_count_use(p, ID_SWIFT_MARCH, sim)
 	return true
 
 
@@ -152,7 +154,7 @@ static func activate_crown_shield(sim: Simulation, p: Player) -> bool:
 		return false
 	p.crown_shield_until = now + Balance.CROWN_SHIELD_DURATION_SEC
 	p.crown_shield_cd_until = now + crown_shield_cooldown_sec(p)
-	_count_use(p, ID_CROWN_SHIELD)
+	_count_use(p, ID_CROWN_SHIELD, sim)
 	return true
 
 
@@ -168,7 +170,7 @@ static func activate_rally(sim: Simulation, p: Player) -> bool:
 	p.troops -= c
 	p.rally_until = now + Balance.RALLY_DURATION_SEC
 	p.rally_cd_until = now + Balance.RALLY_COOLDOWN_SEC
-	_count_use(p, ID_RALLY)
+	_count_use(p, ID_RALLY, sim)
 	return true
 
 
@@ -194,7 +196,7 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 	p.troops -= c
 	p.bombard_cd_until = now + Balance.BOMBARD_COOLDOWN_SEC
 	p.bombard_until = now + Balance.BOMBARD_DURATION_SEC
-	_count_use(p, ID_BOMBARD)
+	_count_use(p, ID_BOMBARD, sim)
 	state.bombards.append({
 		"owner_id": p.id,
 		"target_x": target_x,

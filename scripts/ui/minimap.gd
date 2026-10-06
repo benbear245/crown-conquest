@@ -63,7 +63,7 @@ func _draw_view() -> void:
 		var c: Vector2 = r.position + (Vector2(p.crown_x, p.crown_y) + Vector2(0.5, 0.5)) * k
 		var radius: float = 5.0 if p.id == _local_id else 3.5
 		_view.draw_circle(c, radius + 1.5, Color.BLACK)
-		_view.draw_circle(c, radius, Icons.GOLD if p.id == _local_id else p.color.lightened(0.3))
+		_view.draw_circle(c, radius, Icons.GOLD if p.id == _local_id else Palette.player(p.id).lightened(0.3))
 
 
 func _on_input(event: InputEvent) -> void:

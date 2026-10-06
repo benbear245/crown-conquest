@@ -67,7 +67,7 @@ func update_view() -> void:
 			continue
 		var p: Player = ranked[i]
 		(r["row"] as Control).visible = true
-		(r["swatch"] as ColorRect).color = p.color if p.is_alive else Color(0.25, 0.25, 0.25)
+		(r["swatch"] as ColorRect).color = Palette.player(p.id) if p.is_alive else Color(0.25, 0.25, 0.25)
 		(r["status"] as IconView).kind = IconView.Kind.CROWN if p.is_alive else IconView.Kind.SKULL
 		(r["name"] as Label).text = p.display_name
 		(r["rising"] as IconView).visible = p.id == rising_id

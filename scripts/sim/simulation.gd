@@ -188,6 +188,13 @@ func announce(text: String, seconds: float = 4.0) -> void:
 	state.events.append({"type": "announce", "text": text, "seconds": seconds})
 
 
+# Presentation-only events (sounds, shake, vibration). Skipped in headless
+# runs so the balance simulator doesn't pay for them.
+func emit_event(e: Dictionary) -> void:
+	if not headless:
+		state.events.append(e)
+
+
 func mark_flash(tile_idx: int) -> void:
 	if headless:
 		return

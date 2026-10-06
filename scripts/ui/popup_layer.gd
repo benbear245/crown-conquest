@@ -46,7 +46,7 @@ func _draw() -> void:
 		var w: float = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var pos: Vector2 = screen - Vector2(w * 0.5, 0.0)
 		var alpha: float = 1.0 - t * t
-		var col: Color = Balance.color_for_player(int(info["owner_id"])).lightened(0.45)
+		var col: Color = Palette.player(int(info["owner_id"])).lightened(0.45)
 		col.a = alpha
 		_font.draw_string_outline(get_canvas_item(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 6, Color(0, 0, 0, alpha))
 		_font.draw_string(get_canvas_item(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, col)

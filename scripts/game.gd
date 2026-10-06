@@ -11,12 +11,12 @@ const MAX_TICKS_PER_FRAME: int = 5
 @onready var _overlay: WorldOverlay = $Overlay
 @onready var _hud: HUD = $HUD
 @onready var _camera: CameraRig = $Camera2D
+@onready var _feel: GameFeel = $GameFeel
 
 var _simulation: Simulation
 var _targeting: Targeting
 var _touch: TouchInput = TouchInput.new()
 var _tick_accumulator: float = 0.0
-var _prev_crown_alert: bool = false
 var _was_in_sweet_spot: bool = false
 
 
@@ -41,6 +41,7 @@ func _ready() -> void:
 	_hud.ability_bar.ability_pressed.connect(_on_ability_pressed)
 	_hud.enemy_panel.offer_truce_requested.connect(_on_offer_truce)
 	_hud.truce_panel.respond.connect(func(from_id: int, ok: bool) -> void: _simulation.player_respond_truce(_simulation.local_player_id, from_id, ok))
+	Settings.changed.connect(_on_settings_changed)
 	_bind_match()
 
 
@@ -50,13 +51,14 @@ func _bind_match() -> void:
 	_overlay.local_player_id = _simulation.local_player_id
 	_hud.setup(_simulation, _map)
 	_camera.fit_to_world(_map.world_size())
-	_prev_crown_alert = false
+	_feel.setup(_simulation, _camera)
 	_targeting.exit()
 	_hud.hint("placement")
 
 
 func _process(delta: float) -> void:
-	_tick_accumulator += delta
+	# Slow motion (a Crown just fell) only slows the simulation clock.
+	_tick_accumulator += delta * _feel.time_scale()
 	var ticks_this_frame: int = 0
 	while _tick_accumulator >= Balance.TICK_DELTA and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_tick_accumulator -= Balance.TICK_DELTA
@@ -64,6 +66,7 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 	if ticks_this_frame == MAX_TICKS_PER_FRAME:
 		_tick_accumulator = 0.0
+	_feel.consume(_simulation.state.events)
 	_hud.consume_events(_simulation.state.events)
 	_simulation.state.events.clear()
 	_map.render()
@@ -84,13 +87,9 @@ func _sync_overlay() -> void:
 	_targeting.sync_overlay()
 
 
-# Vibrate when the Crown comes under attack; tip about the sweet spot.
+# Tip about the sweet spot (Crown alarm sound/vibration live in GameFeel).
 func _watch_local_player() -> void:
 	var me: Player = _simulation.state.get_player(_simulation.local_player_id)
-	var active: bool = me != null and me.is_alive and me.crown_alert_until > _simulation.state.match_time
-	if active and not _prev_crown_alert:
-		Settings.vibrate(120)
-	_prev_crown_alert = active
 	if me != null and me.is_alive and _simulation.state.phase == Balance.PHASE_MATCH:
 		var ratio: float = me.troops / maxf(me.troop_cap(), 1.0)
 		var sweet: bool = ratio >= Balance.TROOP_BAR_SWEET_LOW and ratio <= Balance.TROOP_BAR_SWEET_HIGH
@@ -236,6 +235,11 @@ func _start_new_match() -> void:
 	_simulation.start_match(_simulation.size_preset, _simulation.map_type, _random_seed())
 	_hud.end_overlay.reset()
 	_bind_match()
+
+
+func _on_settings_changed() -> void:
+	if _map.uses_colorblind() != Settings.colorblind:
+		_map.repaint_all()
 
 
 func _random_seed() -> int:

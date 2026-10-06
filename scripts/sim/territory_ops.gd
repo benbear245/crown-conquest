@@ -64,6 +64,7 @@ static func expand_one_ring(sim: Simulation, player: Player) -> void:
 	var terrain: PackedByteArray = state.terrain
 	var w: int = state.width
 	var min_cost: float = INF
+	var claimed: int = 0
 	for ni: int in frontier:
 		# Same maths as claim_cost_idx(): (base x terrain) [x ruins] x discount.
 		var cost: float = Balance.CLAIM_COST_BASE * claim_costs[terrain[ni]]
@@ -75,8 +76,11 @@ static func expand_one_ring(sim: Simulation, player: Player) -> void:
 		if player.expansion_troops < cost:
 			continue
 		player.expansion_troops -= cost
+		claimed += 1
 		@warning_ignore("integer_division")
 		claim_tile(sim, player.id, ni % w, ni / w)
+	if claimed > 0:
+		sim.emit_event({"type": "expand", "player_id": player.id, "tiles": claimed})
 	if player.expansion_troops < min_cost:
 		refund_expansion(player)
 

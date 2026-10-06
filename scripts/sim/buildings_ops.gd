@@ -161,6 +161,7 @@ static func _build(sim: Simulation, player: Player, type: int, x: int, y: int) -
 			player.port_count += 1
 	player.buildings_built[type] = int(player.buildings_built.get(type, 0)) + 1
 	state.dirty_tiles[ti] = true
+	sim.emit_event({"type": "build", "player_id": player.id, "building": type})
 	return true
 
 
@@ -219,6 +220,7 @@ static func buy_keep(sim: Simulation, player: Player, target_level: int) -> bool
 		return false
 	player.troops -= Balance.KEEP_COST[target_level]
 	player.keep_level = target_level
+	sim.emit_event({"type": "build", "player_id": player.id, "building": -1})
 	return true
 
 
@@ -284,7 +286,8 @@ static func _pay_loot(sim: Simulation, capturer_id: int, loot: float, tile_idx: 
 		return
 	cap_p.troops += loot
 	if not sim.headless:
-		sim.add_popup(tile_idx, "+%d loot" % int(round(loot)), capturer_id)
+		sim.add_popup(tile_idx, "+%s loot" % GameState.format_int(int(round(loot))), capturer_id)
+		sim.emit_event({"type": "loot", "player_id": capturer_id})
 
 
 # Elimination wipes every building, wall and boat the victim had (no loot).

@@ -94,6 +94,7 @@ static func accept(sim: Simulation, a_id: int, b_id: int) -> void:
 	b.active_truces[a_id] = expires
 	a.truces_made += 1
 	b.truces_made += 1
+	sim.emit_event({"type": "truce", "a": a_id, "b": b_id})
 	# Neither side can attack the other: running attacks between them retreat.
 	var i: int = 0
 	while i < state.attacks.size():

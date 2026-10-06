@@ -328,6 +328,26 @@ static var PLAYER_COLORS: PackedColorArray = PackedColorArray([
 ])
 
 
+# Colour-blind friendly alternative (Okabe-Ito based; no pure blue, which is
+# too close to water). Used when Settings.colorblind is on.
+static var PLAYER_COLORS_COLORBLIND: PackedColorArray = PackedColorArray([
+	Color(0.00, 0.00, 0.00),      # 0: unowned sentinel
+	Color(0.95, 0.90, 0.25),      # 1: yellow (you)
+	Color(0.90, 0.60, 0.00),      # 2: orange
+	Color(0.35, 0.71, 0.91),      # 3: sky blue
+	Color(0.00, 0.62, 0.45),      # 4: bluish green
+	Color(0.84, 0.37, 0.00),      # 5: vermillion
+	Color(0.80, 0.47, 0.65),      # 6: reddish purple
+	Color(0.95, 0.95, 0.95),      # 7: white
+	Color(0.20, 0.20, 0.22),      # 8: near black
+	Color(0.55, 0.40, 0.85),      # 9: violet
+	Color(0.60, 0.60, 0.60),      # 10: grey
+	Color(0.55, 0.33, 0.10),      # 11: brown
+	Color(0.00, 0.35, 0.40),      # 12: dark teal
+])
+const OWNER_TERRAIN_TINT_COLORBLIND: float = 0.18
+
+
 func color_for_player(player_id: int) -> Color:
 	if player_id <= 0 or player_id >= PLAYER_COLORS.size():
 		return Color.BLACK

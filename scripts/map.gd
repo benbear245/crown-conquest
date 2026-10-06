@@ -8,6 +8,7 @@ var _image: Image
 var _texture: ImageTexture
 var _state: GameState
 var _ready_to_draw: bool = false
+var _painted_colorblind: bool = false
 
 
 func setup(state: GameState) -> void:
@@ -34,6 +35,20 @@ func render() -> void:
 	queue_redraw()
 
 
+# Whether the image was last painted with the colour-blind palette.
+func uses_colorblind() -> bool:
+	return _painted_colorblind
+
+
+# Repaint every tile (after the colour-blind setting changes).
+func repaint_all() -> void:
+	if _state == null or _image == null:
+		return
+	_paint_all()
+	_texture.update(_image)
+	queue_redraw()
+
+
 func texture() -> Texture2D:
 	return _texture
 
@@ -45,6 +60,7 @@ func world_size() -> Vector2:
 
 
 func _paint_all() -> void:
+	_painted_colorblind = Settings.colorblind
 	for i in range(_state.tile_count()):
 		var p := _state.idx_to_xy(i)
 		_image.set_pixel(p.x, p.y, _color_for_tile(i))
@@ -80,7 +96,7 @@ func _base_color_for_tile(i: int) -> Color:
 			var centre: int = _state.crown_centres.get(crown_owner, -1)
 			if i == centre:
 				return Color(0.98, 0.86, 0.22)
-			return Balance.color_for_player(crown_owner).lightened(0.35)
+			return Palette.player(crown_owner).lightened(0.35)
 	# Wall tile: dark stripe on top of the owner tint.
 	if _state.wall_tiles.has(i) and owner_id == _state.wall_tiles[i]:
 		return Color(0.08, 0.08, 0.10)
@@ -92,13 +108,13 @@ func _base_color_for_tile(i: int) -> Color:
 	if owner_id == 0:
 		return terrain_color
 	if owner_id == GameState.RUINS_OWNER_ID:
-		return Balance.RUINS_COLOR.lerp(terrain_color, Balance.OWNER_TERRAIN_TINT)
-	var owner_color := Balance.color_for_player(owner_id)
-	return owner_color.lerp(terrain_color, Balance.OWNER_TERRAIN_TINT)
+		return Balance.RUINS_COLOR.lerp(terrain_color, Palette.owner_tint())
+	var owner_color := Palette.player(owner_id)
+	return owner_color.lerp(terrain_color, Palette.owner_tint())
 
 
 func _building_color(b: Building, owner_id: int) -> Color:
-	var owner_color := Balance.color_for_player(owner_id)
+	var owner_color := Palette.player(owner_id)
 	match b.type:
 		Balance.BUILDING_FORT:
 			return owner_color.darkened(0.35)
