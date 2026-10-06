@@ -2,7 +2,7 @@ class_name Map
 extends Node2D
 
 # The Map node only draws. It never mutates game state.
-# Pixel grid matches tile grid, drawn through one ImageTexture.
+# World coords are 1:1 with tiles; the Camera2D handles screen fitting.
 
 var _image: Image
 var _texture: ImageTexture
@@ -15,12 +15,13 @@ func setup(state: GameState) -> void:
 	_image = Image.create(_state.width, _state.height, false, Image.FORMAT_RGBA8)
 	_paint_all()
 	_texture = ImageTexture.create_from_image(_image)
+	_state.dirty_tiles.clear()
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_ready_to_draw = true
 	queue_redraw()
 
 
 func render() -> void:
-	# Apply all dirty tiles into the Image, then push once to the GPU.
 	if _state == null or _texture == null:
 		return
 	if _state.dirty_tiles.is_empty():
@@ -31,6 +32,12 @@ func render() -> void:
 	_state.dirty_tiles.clear()
 	_texture.update(_image)
 	queue_redraw()
+
+
+func world_size() -> Vector2:
+	if _state == null:
+		return Vector2.ZERO
+	return Vector2(_state.width, _state.height)
 
 
 func _paint_all() -> void:
@@ -60,32 +67,4 @@ func _terrain_color(t: int) -> Color:
 func _draw() -> void:
 	if not _ready_to_draw or _texture == null:
 		return
-	var r := _draw_rect()
-	draw_texture_rect(_texture, r, false)
-
-
-func _draw_rect() -> Rect2:
-	var vp_size := get_viewport_rect().size
-	var tex_w := float(_state.width)
-	var tex_h := float(_state.height)
-	var s: float = minf(vp_size.x / tex_w, vp_size.y / tex_h)
-	var out_size := Vector2(tex_w * s, tex_h * s)
-	var out_pos := (vp_size - out_size) * 0.5
-	return Rect2(out_pos, out_size)
-
-
-func screen_to_tile(screen_pos: Vector2) -> Vector2i:
-	if _state == null or _texture == null:
-		return Vector2i(-1, -1)
-	var r := _draw_rect()
-	if not r.has_point(screen_pos):
-		return Vector2i(-1, -1)
-	var local := screen_pos - r.position
-	var s := r.size.x / float(_state.width)
-	if s <= 0.0:
-		return Vector2i(-1, -1)
-	var tx := int(local.x / s)
-	var ty := int(local.y / s)
-	tx = clampi(tx, 0, _state.width - 1)
-	ty = clampi(ty, 0, _state.height - 1)
-	return Vector2i(tx, ty)
+	draw_texture_rect(_texture, Rect2(Vector2.ZERO, Vector2(_state.width, _state.height)), false)

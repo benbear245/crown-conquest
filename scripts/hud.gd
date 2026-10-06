@@ -13,6 +13,8 @@ const COLOR_NORMAL: Color = Color(0.95, 0.85, 0.35)
 const COLOR_OVER: Color = Color(0.95, 0.40, 0.35)
 const COLOR_TEXT: Color = Color(0.95, 0.95, 0.95)
 
+signal new_map_pressed
+
 var _state: GameState
 var _send_fraction: float = 0.50
 
@@ -23,6 +25,7 @@ var _per_sec_label: Label
 var _land_label: Label
 var _slider: HSlider
 var _slider_label: Label
+var _new_map_button: Button
 
 
 func _ready() -> void:
@@ -96,6 +99,12 @@ func _build_top() -> void:
 	row.add_child(_per_sec_label)
 	_land_label = _make_stat_label("0.0% land", 130)
 	row.add_child(_land_label)
+
+	_new_map_button = Button.new()
+	_new_map_button.text = "New map"
+	_new_map_button.custom_minimum_size = Vector2(110, BAR_HEIGHT)
+	_new_map_button.pressed.connect(func() -> void: new_map_pressed.emit())
+	row.add_child(_new_map_button)
 
 
 func _make_stat_label(initial: String, min_width: int) -> Label:

@@ -8,6 +8,10 @@ const TICKS_PER_SECOND: int = 10
 const TICK_DELTA: float = 1.0 / float(TICKS_PER_SECOND)
 
 # --- Map sizes ----------------------------------------------------------------
+const MAP_SIZE_SMALL: int = 0
+const MAP_SIZE_MEDIUM: int = 1
+const MAP_SIZE_LARGE: int = 2
+
 const MAP_SMALL_WIDTH: int = 160
 const MAP_SMALL_HEIGHT: int = 96
 const MAP_SMALL_PLAYERS: int = 5
@@ -19,6 +23,12 @@ const MAP_MEDIUM_PLAYERS: int = 8
 const MAP_LARGE_WIDTH: int = 260
 const MAP_LARGE_HEIGHT: int = 156
 const MAP_LARGE_PLAYERS: int = 12
+
+# --- Map types ---------------------------------------------------------------
+const MAP_TYPE_CONTINENT: int = 0
+const MAP_TYPE_ARCHIPELAGO: int = 1
+const MAP_TYPE_HIGHLANDS: int = 2
+const MAP_TYPE_RANDOM: int = 3
 
 # --- Troops -------------------------------------------------------------------
 const STARTING_TROOPS: float = 150.0

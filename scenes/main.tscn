@@ -7,6 +7,8 @@
 [node name="Main" type="Node2D"]
 script = ExtResource("1_game")
 
+[node name="Camera2D" type="Camera2D" parent="."]
+
 [node name="Map" type="Node2D" parent="."]
 script = ExtResource("2_map")
 

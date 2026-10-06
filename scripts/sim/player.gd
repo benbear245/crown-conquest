@@ -23,6 +23,7 @@ var border: Dictionary = {}
 
 # Peak land this match (for XP after a match).
 var peak_land: int = 0
+var gem_tiles: int = 0                  # owned gem-field tiles, drives growth bonus
 
 # Expansion bucket: troops committed to grabbing free land. Refunded when done.
 var expansion_troops: float = 0.0

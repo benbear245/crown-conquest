@@ -9,20 +9,23 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 ]
 
 var state: GameState = GameState.new()
+var map_type: int = Balance.MAP_TYPE_CONTINENT
+var size_preset: int = Balance.MAP_SIZE_MEDIUM
 
 
 # --- Match setup -------------------------------------------------------------
 
 func start_default_match(match_seed: int = 0) -> void:
-	state.configure(Balance.MAP_MEDIUM_WIDTH, Balance.MAP_MEDIUM_HEIGHT, match_seed)
-	_fill_default_terrain()
+	start_match(Balance.MAP_SIZE_MEDIUM, Balance.MAP_TYPE_CONTINENT, match_seed)
+
+
+func start_match(size: int, mt: int, match_seed: int) -> void:
+	size_preset = size
+	map_type = mt
+	var dims := MapGen.dims_for_size(size)
+	state.configure(dims.x, dims.y, match_seed)
+	MapGen.generate(state, mt)
 	_add_local_player()
-
-
-func _fill_default_terrain() -> void:
-	# Plains everywhere for Prompt 2. Terrain generation lands in Prompt 3.
-	for i in range(state.terrain.size()):
-		state.terrain[i] = Balance.TERRAIN_PLAINS
 
 
 func _add_local_player() -> void:
@@ -32,10 +35,44 @@ func _add_local_player() -> void:
 	p.color = Balance.color_for_player(1)
 	p.troops = Balance.STARTING_TROOPS
 	state.players.append(p)
+	var start := _find_starting_tile(10)
+	_claim_circle(p, start.x, start.y, Balance.STARTING_LAND_RADIUS)
+
+
+# Spirals outward from (preferred_x, height/2) to find a non-blocked tile with
+# a mostly non-blocked neighbourhood. Used to drop the local player's start.
+func _find_starting_tile(preferred_x: int) -> Vector2i:
 	@warning_ignore("integer_division")
 	var cy: int = state.height / 2
-	var cx: int = 10
-	_claim_circle(p, cx, cy, Balance.STARTING_LAND_RADIUS)
+	var fallback := Vector2i(clampi(preferred_x, 2, state.width - 3), cy)
+	for radius in range(maxi(state.width, state.height)):
+		for dy in range(-radius, radius + 1):
+			for dx in range(-radius, radius + 1):
+				if radius > 0 and absi(dx) != radius and absi(dy) != radius:
+					continue
+				var x := preferred_x + dx
+				var y := cy + dy
+				if not state.in_bounds(x, y):
+					continue
+				if state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
+					continue
+				if _non_blocked_neighbour_count(x, y, Balance.STARTING_LAND_RADIUS) >= 25:
+					return Vector2i(x, y)
+	return fallback
+
+
+func _non_blocked_neighbour_count(cx: int, cy: int, r: int) -> int:
+	var r2 := r * r
+	var n := 0
+	for y in range(maxi(0, cy - r), mini(state.height, cy + r + 1)):
+		for x in range(maxi(0, cx - r), mini(state.width, cx + r + 1)):
+			var dx := x - cx
+			var dy := y - cy
+			if dx * dx + dy * dy > r2:
+				continue
+			if not state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
+				n += 1
+	return n
 
 
 func _claim_circle(player: Player, cx: int, cy: int, r: int) -> void:
@@ -44,8 +81,11 @@ func _claim_circle(player: Player, cx: int, cy: int, r: int) -> void:
 		for x in range(maxi(0, cx - r), mini(state.width, cx + r + 1)):
 			var dx := x - cx
 			var dy := y - cy
-			if dx * dx + dy * dy <= r2:
-				_claim_tile(player.id, x, y)
+			if dx * dx + dy * dy > r2:
+				continue
+			if state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
+				continue
+			_claim_tile(player.id, x, y)
 
 
 # --- Tick loop ---------------------------------------------------------------
@@ -65,9 +105,18 @@ func _apply_growth() -> void:
 			var extra := p.troops - cap
 			p.troops = cap + extra * (1.0 - Balance.OVER_CAP_SHRINK_PER_SEC * Balance.TICK_DELTA)
 		else:
-			p.troops += p.troops_per_second_at(cap) * Balance.TICK_DELTA
+			var base_tps := p.troops_per_second_at(cap)
+			var mult := _growth_multiplier(p)
+			p.troops += base_tps * mult * Balance.TICK_DELTA
 			if p.troops > cap:
 				p.troops = cap
+
+
+# Sum of additive growth modifiers. Gems live here; Underdog and Empire upkeep
+# land in Prompt 10.
+func _growth_multiplier(p: Player) -> float:
+	var gem_bonus := minf(float(p.gem_tiles) * Balance.GEM_GROWTH_BONUS_PER_TILE, Balance.GEM_GROWTH_BONUS_MAX)
+	return 1.0 + gem_bonus
 
 
 func _apply_expansions() -> void:
@@ -190,11 +239,16 @@ func _update_borders_on_change(i: int, from_owner: int, to_owner: int) -> void:
 	var pos := state.idx_to_xy(i)
 	var from_player: Player = state.get_player(from_owner)
 	var to_player: Player = state.get_player(to_owner)
+	var is_gem: bool = state.terrain[i] == Balance.TERRAIN_GEM
 	if from_player != null:
 		from_player.border.erase(i)
 		from_player.land -= 1
+		if is_gem:
+			from_player.gem_tiles -= 1
 	if to_player != null:
 		to_player.land += 1
+		if is_gem:
+			to_player.gem_tiles += 1
 		if to_player.land > to_player.peak_land:
 			to_player.peak_land = to_player.land
 		if _tile_is_border(i, to_owner):
