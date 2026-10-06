@@ -97,6 +97,42 @@ static func find_valid_crown_position_near(state: GameState, ax: int, ay: int) -
 	return Vector2i(-1, -1)
 
 
+# Placement phase, one tick: bots place as soon as they can (in Teams next to
+# their ally; a human's ally waits for them); when the countdown ends anyone
+# left gets a spot. The tutorial has no countdown: it starts once all placed.
+static func tick_placement(sim: Simulation) -> void:
+	var state: GameState = sim.state
+	if not state.tutorial_rules:
+		state.placement_time_left -= Balance.TICK_DELTA
+	for p: Player in state.players:
+		if p.is_bot and p.crown_x < 0:
+			var ally: Player = sim.ally_of(p)
+			if ally != null and not ally.is_bot and ally.crown_x < 0:
+				continue
+			var pos: Vector2i = _spot_for(sim, p)
+			if pos.x >= 0:
+				place_crown(sim, p, pos.x, pos.y)
+	if state.placement_time_left <= 0.0:
+		for p: Player in state.players:
+			if p.crown_x < 0:
+				var pos: Vector2i = _spot_for(sim, p)
+				place_crown(sim, p, pos.x, pos.y)
+	var all_placed: bool = true
+	for p: Player in state.players:
+		all_placed = all_placed and p.crown_x >= 0
+	if state.placement_time_left <= 0.0 or (state.tutorial_rules and all_placed):
+		state.phase = Balance.PHASE_MATCH
+
+
+static func _spot_for(sim: Simulation, p: Player) -> Vector2i:
+	var ally: Player = sim.ally_of(p)
+	if ally != null and ally.crown_x >= 0:
+		var near: Vector2i = find_valid_crown_position_near(sim.state, ally.crown_x, ally.crown_y)
+		if near.x >= 0:
+			return near
+	return find_valid_crown_position(sim.state)
+
+
 # --- Crown move --------------------------------------------------------------
 
 static func move_cost(player: Player) -> float:

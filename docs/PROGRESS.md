@@ -431,3 +431,51 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 - Delete your save (or use a fresh install) and launch: the tutorial should start. Follow every step on your phone; check the arrow always points somewhere sensible, especially for the long-press Fort step.
 - Skip it, restart the game: it shouldn't come back. Then Settings → Replay tutorial.
 - Is anything confusing in the step texts? They're all in `scripts/tutorial.gd` (`_update_text`).
+
+## Prompt 17: Balance pass 1
+
+**Starting point** (100 matches, Medium, 8 bots, Mixed, + 100 "1 Hard vs 7 Easy"; `reports/balance_2026-10-06_p17_baseline.md`): median match **4:55** (target 7–11) and Ports used in **19%** of matches (target 30%) failed; Turtle wins (35%) and "leader at 3:00 wins" (53%) were right at their limits.
+
+**Why matches were short.** I logged every match minute by minute: the whole map is claimed by 2:00 (75% free at 1:00, 0% at 2:00) and Crowns start falling at 2:00 (median Crown fall 2:45). A freshly expanded empire holds about 1 troop per tile, and Crown / zone / Fort defense all *multiply* that tiny number, so raising Crown defense multipliers barely changed anything (tested). The flat part of the attack cost is what makes conquest cost real troops.
+
+**How I tested.** One number at a time. Candidates were first screened with quick 40–60-match runs (each applied alone, then reverted), then each real change was rerun on 50 matches + 50 Hard checks. From change 4 on I reran on the full **100 + 100**, because 50-match samples swung the Turtle share by ±7 points and these targets sit right at their limits. A change was kept only if it helped without breaking a passing target.
+
+| # | Number (`scripts/balance.gd`) | Old → New | Why | Result | Kept? |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `ATTACK_TILE_COST_BASE` | 2 → **6** | Crowns fell for almost nothing right after the land rush | 50 matches: median 5:01 → 6:50, Port 24% → 28%, Bombard 76% → 94%; Turtles 36% → 42% | Yes |
+| 2 | `FORT_COST_BASE` | 300 → **400** | Turtles winning too often (the design's own fix: raise Fort cost) | 50: median 8:18, Port 32%, Turtles 40%, Hard vs Easy 60% | Yes |
+| 3 | `BUILDING_DEFENSE_CAP` | ×4 → **×3.5** | Turtles still 40%: cap the Fort × Wall × Crown-zone stack | 50: Turtles 36%, median 7:15, Port 30%. Full 100: median 6:47, Turtles 38%, Port 28% | Yes |
+| 4 | `DOMINION_WIN_FRACTION` | 60% → **65%** | Median 6:47 on 100 | 100: median 7:31; matches hitting 15:00 rose 4% → 6% (fixed by the bot fix below → 0%) | Yes |
+| 5 | `DOMINION_WIN_FRACTION` | 65% → 70% | Port 28%, Turtles 37% | 100: Port 29%, Turtles 37%, 15:00 endings 0% → 4%. Too little gain for changing a headline rule again | **No** |
+| 6 | `GROWTH_INTEREST_RATE_PER_SEC` | 0.05 → 0.035 | Turtles park their troops at the growth peak | 100: Turtles 40%, Port 17% | **No** |
+| 7 | `BOAT_RANGE_TILES` | 60 → **120** | Bots only place a Port where a boat could reach free land or Ruins | 100: Port 28% → 42%, median 7:02 | Yes |
+| 8 | `BOT_ACT_THRESHOLD_PERSONALITY` (Turtle) | +0.10 → **+0.05** | Turtle bots kept a bigger troop reserve than everyone else, sitting at the growth peak *and* at the strongest defense | 100: everything passes (below) | Yes |
+
+**Bot fix (not one of the 8 numbers): the Final Siege push.** The matches that ran to 15:00 were two bots (mostly Easy) trading ~20 small attacks a minute with each other, never building a decisive push. In the Final Siege every bot now saves up to half its troop cap and then attacks with at least 70% of its troops (`BOT_SIEGE_ATTACK_THRESHOLD` 0.50, `BOT_SIEGE_SEND_MIN` 0.70). 15:00 endings went from 6% to 0% with nothing else changing.
+
+**Tried and reverted (code, not a number):** letting Normal bots build Ports too ("teach the bots to use it"). Port use went to 37% but Turtle wins jumped to 51–54%, so I put the code back exactly as it was.
+
+**Final result** (100 matches + 100 Hard checks, seeds 1–100; `reports/balance_2026-10-06_pass1.md`): **all 7 targets pass.**
+
+| Check | Target | Before | After |
+| --- | --- | --- | --- |
+| Median match length | 7–11 min | 4:55 | **7:55** |
+| Wins per personality | No personality above 35% | Turtle 35% | Turtle 35% (Expander 25, Raider 24, Opportunist 16) |
+| Land leader at 3:00 wins | Under 55% | 53% | **39%** |
+| Decided by the 15:00 limit | Under 5% | 0% | 2% |
+| Crowns captured per match | At least 5 of 7 | 5.8 | 5.9 |
+| Each building and ability used | ≥ 30% of matches | Port 19% | **Port 38%** (Fort 100, Wall 99, Barracks 91, Swift March 100, Crown Shield 100, Rally 100, Bombard 93) |
+| 1 Hard bot vs 7 Easy | Hard wins ≥ 40% | 42% | **56%** |
+
+**Honest caveats**
+- Turtles are exactly at the 35% limit; on a different set of seeds they may land a few points either side. If your playtests say Turtles are hard to kill, the next lever is Turtles' Keep/Wall spending.
+- In the default Mixed lobby the single Hard bot now wins 60% of matches (was 32%); Easy bots win 8%. Not a target, but Mixed lobbies will feel tougher; watch for it when you play.
+- DESIGN.md is updated to match (Dominion 65%, attack cost formula and example, building cap ×3.5, Fort 400, boats up to 120 tiles, the Turtle row, the Final Siege push), and so is the one-line summary in CLAUDE.md.
+- Also in this commit: `simulation.gd` had grown past the ~400-line limit, so Teams/Daily logic moved into `scripts/sim/teams_ops.gd` and Crown placement into `CrownsOps`. Results were bit-identical before and after the move. Smoke tests now read Fort costs from Balance instead of hard-coding 300.
+- All 311 smoke checks and 13 flow checks pass.
+
+**What to test**
+- Play a few Skirmish matches on default settings: do matches last about 7–9 minutes? Does the 2:00–4:00 window feel less like a Crown massacre?
+- Watch the endgame after 10:00: bots should make big pushes instead of small back-and-forth attacks.
+- Build Forts (now 400) and Walls: do they still feel worth it?
+- Try an Archipelago map: with boats reaching 120 tiles, Ports should matter a lot more.

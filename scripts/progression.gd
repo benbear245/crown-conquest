@@ -32,7 +32,7 @@ const ACHIEVEMENTS: Array = [
 	{"id": "underdog", "name": "Underdog", "desc": "Win after being the smallest player at 3:00", "title": "Underdog"},
 	{"id": "island_king", "name": "Island King", "desc": "Win on Archipelago after building 3 Ports", "title": "Island King"},
 	{"id": "speedrun", "name": "Speedrun", "desc": "Win in under 6 minutes", "title": "Swift"},
-	{"id": "dominion", "name": "Dominion", "desc": "Win by owning 60% of the land", "title": "Dominator"},
+	{"id": "dominion", "name": "Dominion", "desc": "Win by Dominion (owning 65% of the land)", "title": "Dominator"},
 	{"id": "first_victory", "name": "First Victory", "desc": "Win your first match", "title": "Victor"},
 	{"id": "hard_won", "name": "Hard Won", "desc": "Win a match against Hard bots", "title": "Champion"},
 	{"id": "untouchable", "name": "Untouchable", "desc": "Win without your Crown ever coming under attack", "title": "Untouchable"},

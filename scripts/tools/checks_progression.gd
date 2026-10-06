@@ -54,7 +54,7 @@ func _xp_and_levels(t: SmokeTest) -> void:
 func _record(t: SmokeTest) -> void:
 	SaveData.data = SaveData.defaults()
 	var won := _result({"won": true, "peak_pct": 41.7, "crowns": 3, "hard": true, "duration_sec": 330.0,
-		"win_reason": "Dominion win (60%+ of the usable map)", "crown_attacked": false, "smallest_at_3min": true})
+		"win_reason": "Dominion win (65%+ of the usable map)", "crown_attacked": false, "smallest_at_3min": true})
 	var s: Dictionary = SaveData.record_match(won)
 	t.check(int(s.xp) == 1890 and int(s.new_level) == 3 and int(s.old_level) == 1, "first match: +1,890 XP, level 1 → 3")
 	t.check((s.unlocks as Array).has("Violet colour") and (s.unlocks as Array).has("Stripes pattern") and (s.unlocks as Array).has("Tiara Crown"), "level-ups list what unlocked")

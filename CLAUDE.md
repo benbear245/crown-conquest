@@ -1,6 +1,6 @@
 # Crown Conquest
 
-**Crown Conquest** is a landscape real-time territory game for phones. Grow troops, grab land, and capture enemy Crowns while protecting your own. One match lasts 7-12 minutes against up to 11 bots. You win by being the last with a Crown, owning 60% of usable land (Dominion), or holding the most land when the 15-minute limit hits.
+**Crown Conquest** is a landscape real-time territory game for phones. Grow troops, grab land, and capture enemy Crowns while protecting your own. One match lasts 7-12 minutes against up to 11 bots. You win by being the last with a Crown, owning 65% of usable land (Dominion), or holding the most land when the 15-minute limit hits.
 
 ## Always follow docs/DESIGN.md
 

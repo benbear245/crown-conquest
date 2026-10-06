@@ -111,6 +111,8 @@ static func _attacks(sim: Simulation, p: Player, scan: BotScan, out: Array[Dicti
 		frac = minf(frac, hard_safe_fraction(state, p, scan))
 		if frac < Balance.BOT_HARD_SEND_MIN:
 			return   # can't send a real push and stay as tough as the neighbours
+	if state.is_final_siege():
+		frac = maxf(frac, Balance.BOT_SIEGE_SEND_MIN)   # Final Siege: go for the win
 	var send: float = floorf(p.troops * frac)
 	var rising: int = sim.rising_empire_id()
 	for id: int in scan.enemy_tile.keys():

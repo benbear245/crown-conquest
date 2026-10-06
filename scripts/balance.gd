@@ -55,13 +55,13 @@ const SEND_MIN_FRACTION: float = 0.10
 const SEND_MAX_FRACTION: float = 1.00
 
 # --- Attacking ---------------------------------------------------------------
-const ATTACK_TILE_COST_BASE: float = 2.0
+const ATTACK_TILE_COST_BASE: float = 6.0
 const ATTACK_TILE_COST_SCALE: float = 1.5     # multiplied by defender D x defenses
 const DEFENDER_LOSS_PER_TILE: float = 0.5     # defender loses 0.5 x D per lost tile
 const MAX_SIMULTANEOUS_ATTACKS: int = 3
 const ATTACK_RING_INTERVAL_SEC: float = 0.4
 const RETREAT_RETURN_FRACTION: float = 0.75
-const BUILDING_DEFENSE_CAP: float = 4.0       # Fort x Wall x CrownZone, capped (not Crown tiles)
+const BUILDING_DEFENSE_CAP: float = 3.5       # Fort x Wall x CrownZone, capped (not Crown tiles)
 const PEACE_PERIOD_SEC: float = 60.0
 
 # --- Terrain ------------------------------------------------------------------
@@ -129,7 +129,7 @@ const KEEP_2_CROWN_SHIELD_CD_REDUCTION_SEC: float = 30.0
 const KEEP_3_TROOP_CAP_BONUS: float = 0.05
 
 # --- Buildings ----------------------------------------------------------------
-const FORT_COST_BASE: float = 300.0
+const FORT_COST_BASE: float = 400.0
 const FORT_COST_PER_EXTRA: float = 150.0
 const FORT_RADIUS: int = 8
 const FORT_DEFENSE: float = 1.6
@@ -151,7 +151,7 @@ const BARRACKS_UNLOCK_SEC: float = 60.0
 
 const PORT_COST: float = 250.0
 const PORT_LIMIT: int = 3
-const BOAT_RANGE_TILES: int = 60
+const BOAT_RANGE_TILES: int = 120
 const BOAT_SPEED_TILES_PER_SEC: float = 8.0
 
 const BUILD_MIN_DIST_FROM_ENEMY: int = 3
@@ -204,7 +204,7 @@ const EMPIRE_UPKEEP_PENALTY_2: float = -0.30
 const RISING_EMPIRE_LAND_THRESHOLD: float = 0.30
 const RISING_EMPIRE_ATTACK_DISCOUNT: float = 0.15
 
-const DOMINION_WIN_FRACTION: float = 0.60
+const DOMINION_WIN_FRACTION: float = 0.65
 const MATCH_TIME_LIMIT_SEC: float = 900.0
 
 # --- Truces ------------------------------------------------------------------
@@ -227,6 +227,12 @@ const OPPORTUNIST_BREAK_DELAY_MIN_SEC: float = 15.0
 const OPPORTUNIST_BREAK_DELAY_MAX_SEC: float = 70.0
 
 # --- Bots --------------------------------------------------------------------
+# Final Siege push: Crowns are weak and the match must end, so bots save up
+# to this share of their cap and then attack with at least this share of
+# their troops (instead of trading small attacks until 15:00).
+const BOT_SIEGE_ATTACK_THRESHOLD: float = 0.50
+const BOT_SIEGE_SEND_MIN: float = 0.70
+
 const BOT_EASY_THINK_SEC: float = 2.5
 const BOT_EASY_SEND_MIN: float = 0.20
 const BOT_EASY_SEND_MAX: float = 0.40
@@ -262,7 +268,7 @@ const BOT_EASY_FORT_CHANCE: float = 0.15           # Easy: "Forts, rarely"
 static var BOT_EXPAND_THRESHOLD: PackedFloat32Array = PackedFloat32Array([0.10, 0.20, 0.25])
 static var BOT_ATTACK_THRESHOLD: PackedFloat32Array = PackedFloat32Array([0.25, 0.35, 0.40])
 # ...adjusted by personality (Expander, Raider, Turtle, Opportunist).
-static var BOT_ACT_THRESHOLD_PERSONALITY: PackedFloat32Array = PackedFloat32Array([-0.05, -0.05, 0.10, 0.0])
+static var BOT_ACT_THRESHOLD_PERSONALITY: PackedFloat32Array = PackedFloat32Array([-0.05, -0.05, 0.05, 0.0])
 const BOT_RUSH_ACT_THRESHOLD: float = 0.05         # during the opening land rush...
 const BOT_RUSH_END_SEC: float = 45.0               # ...which ends here, so troops recover before peace ends
 const BOT_SWEET_SPOT_TARGET: float = 0.25          # Hard sends troops down to this share of its cap
@@ -360,8 +366,8 @@ func color_for_player(player_id: int) -> Color:
 static var TEAM_NAMES: PackedStringArray = PackedStringArray(["Lions", "Wolves", "Eagles", "Stags"])
 const ALLY_SEND_COOLDOWN_SEC: float = 10.0
 # A team needs this much of the usable land (combined) for a Dominion win.
-# Higher than the solo 60%: two allies who never fight each other reach 60%
-# together in about 3 minutes, which ended Teams matches far too early.
+# Higher than the solo Dominion: two allies who never fight each other reached
+# 60% together in about 3 minutes, which ended Teams matches far too early.
 const TEAM_DOMINION_WIN_FRACTION: float = 0.80
 const ALLY_CROWN_MIN_DIST: int = 26           # bot allies place their Crowns this close (or as close as allowed)
 const BOT_ALLY_HELP_MIN_RATIO: float = 0.55   # bot helps only with troops >= 55% of its cap

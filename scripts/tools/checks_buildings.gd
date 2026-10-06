@@ -22,33 +22,35 @@ func run(t: SmokeTest) -> void:
 	var menu: BuildMenu = t.hud.build_menu
 	t.check(menu.visible, "long-press on own land opens the build menu")
 	var rows: Array[Button] = menu.get("_rows")
-	t.check(rows[0].text.begins_with("Fort — 300") and not rows[0].disabled, "Fort row shows cost 300 and is enabled: %s" % rows[0].text.replace("\n", " | "))
+	var fort_cost: int = int(Balance.FORT_COST_BASE)
+	t.check(rows[0].text.begins_with("Fort — %d" % fort_cost) and not rows[0].disabled, "Fort row shows cost %d and is enabled: %s" % [fort_cost, rows[0].text.replace("\n", " | ")])
 	t.check(rows[0].text.contains("x1.6"), "Fort row explains its effect")
 	t.check(rows[1].text.contains("Barracks — 400") and not rows[1].disabled, "Barracks row enabled after 1:00")
 	t.check(rows[3].text.contains("Draw walls"), "Wall row present")
 	await t.shot("p8_build_menu")
 	rows[0].pressed.emit()
 	var b: Building = t.sim.state.building_at_tile.get(t.sim.state.idx(spot.x, spot.y), null)
-	t.check(b != null and b.type == Balance.BUILDING_FORT and is_equal_approx(b.paid, 300.0), "Fort built for 300")
+	t.check(b != null and b.type == Balance.BUILDING_FORT and is_equal_approx(b.paid, Balance.FORT_COST_BASE), "Fort built for %d" % int(Balance.FORT_COST_BASE))
 	t.check(me.fort_count == 1 and t.sim.combined_defense_at(t.sim.state.idx(spot.x + 2, spot.y)) >= Balance.FORT_DEFENSE - 0.001,
 		"tiles near the Fort get x1.6 or better")
 
-	# Second Fort costs 450 (300 + 150 each).
+	# Second Fort costs base + 150 (each Fort you own adds 150).
+	var second: int = int(Balance.FORT_COST_BASE + Balance.FORT_COST_PER_EXTRA)
 	await t.long_press_tile(spot)
 	t.check(rows[0].text.begins_with("Upgrade to Fort II — 400"), "long-press on a Fort offers Fort II")
 	rows[0].pressed.emit()
-	t.check(b.type == Balance.BUILDING_FORT2 and is_equal_approx(b.paid, 700.0), "Fort II upgrade recorded (paid 700)")
+	t.check(b.type == Balance.BUILDING_FORT2 and is_equal_approx(b.paid, Balance.FORT_COST_BASE + Balance.FORT2_COST), "Fort II upgrade recorded (paid %d)" % int(Balance.FORT_COST_BASE + Balance.FORT2_COST))
 	var spot2: Vector2i = t.find_own_tile(crown + Vector2i(-3, -3), 10,
 		func(ti: int) -> bool: return BuildingsOps.tile_is_buildable(t.sim, me.id, ti))
 	await t.long_press_tile(spot2)
-	t.check(rows[0].text.begins_with("Fort — 450"), "second Fort costs 450: %s" % rows[0].text.replace("\n", " | "))
+	t.check(rows[0].text.begins_with("Fort — %d" % second), "second Fort costs %d: %s" % [second, rows[0].text.replace("\n", " | ")])
 	menu.close_menu()
 
 	# Greyed out when broke.
 	var saved: float = me.troops
 	me.troops = 10.0
 	await t.long_press_tile(spot2)
-	t.check(rows[0].disabled and rows[0].text.contains("Need 450 troops"), "Fort greyed out with 'Need 450 troops' when broke")
+	t.check(rows[0].disabled and rows[0].text.contains("Need %d troops" % second), "Fort greyed out with 'Need %d troops' when broke" % second)
 	menu.close_menu()
 	me.troops = saved
 
@@ -109,13 +111,14 @@ func run(t: SmokeTest) -> void:
 	var troops_before: float = me.troops
 	TerritoryOps.claim_tile(t.sim, me.id, ep.x, ep.y)
 	var loot: float = me.troops - troops_before
-	t.check(is_equal_approx(loot, 0.25 * 300.0), "capturing the Fort pays 25%% of its cost as loot (+%d)" % int(loot))
+	var expected_loot: int = roundi(Balance.CAPTURED_BUILDING_LOOT_FRACTION * Balance.FORT_COST_BASE)
+	t.check(is_equal_approx(loot, float(expected_loot)), "capturing the Fort pays 25%% of its cost as loot (+%d)" % int(loot))
 	t.check(not t.sim.state.building_at_tile.has(fort_tile), "captured Fort is destroyed")
 	var popup_ok: bool = false
 	for pu: Dictionary in t.sim.state.popups:
-		if str(pu["text"]).begins_with("+75 loot"):
+		if str(pu["text"]).begins_with("+%d loot" % expected_loot):
 			popup_ok = true
-	t.check(popup_ok, "a floating '+75 loot' number is queued")
+	t.check(popup_ok, "a floating '+%d loot' number is queued" % expected_loot)
 	await t.zoom_to(ep, 1.0)
 	await t.shot("p8_loot_popup")
 

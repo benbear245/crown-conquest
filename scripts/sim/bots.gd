@@ -158,7 +158,10 @@ static func act_threshold(p: Player, match_time: float, attacking: bool) -> floa
 	if match_time < Balance.BOT_RUSH_END_SEC:
 		return Balance.BOT_RUSH_ACT_THRESHOLD
 	var base: float = Balance.BOT_ATTACK_THRESHOLD[p.difficulty] if attacking else Balance.BOT_EXPAND_THRESHOLD[p.difficulty]
-	return clampf(base + Balance.BOT_ACT_THRESHOLD_PERSONALITY[p.personality], 0.0, 0.9)
+	var t: float = clampf(base + Balance.BOT_ACT_THRESHOLD_PERSONALITY[p.personality], 0.0, 0.9)
+	if attacking and match_time >= Balance.FINAL_SIEGE_START_SEC:
+		t = maxf(t, Balance.BOT_SIEGE_ATTACK_THRESHOLD)   # save up for a decisive push
+	return t
 
 
 # How much of its troops a bot sends: the difficulty's range. Raiders always

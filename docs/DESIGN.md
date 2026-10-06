@@ -19,7 +19,7 @@ Every player has one resource, **troops**, and spends it on everything: grabbing
 **How you win:**
 
 - Be the last player with a Crown, or
-- Own 60% of all usable land (a **Dominion** win), or
+- Own 65% of all usable land (a **Dominion** win), or
 - If the 15-minute limit is reached, own the most land.
 
 **How you lose:** an enemy captures the centre tile of your Crown.
@@ -66,12 +66,12 @@ The last part of the growth formula is "interest": it's biggest at half the cap 
 Each enemy tile costs the attacker:
 
 ```latex
-\text{tile cost} = 2 + 1.5 \times D \times \text{terrain defense} \times \text{building defense}
+\text{tile cost} = 6 + 1.5 \times D \times \text{terrain defense} \times \text{building defense}
 ```
 
-Here D is the defender's troops per tile (their troops ÷ their land). Building defense is capped at ×4 (the Crown has its own rules). The defender also loses 0.5 × D troops for every tile they lose, and their troop cap shrinks with their land.
+Here D is the defender's troops per tile (their troops ÷ their land). Building defense is capped at ×3.5 (the Crown has its own rules). The defender also loses 0.5 × D troops for every tile they lose, and their troop cap shrinks with their land.
 
-Example: a defender with 2,000 troops on 1,000 tiles has D = 2. A plains tile costs 2 + 1.5 × 2 = 5 troops. A hill tile inside a Fort's range costs 2 + 1.5 × 2 × 1.5 × 1.6 = 9.2 troops.
+Example: a defender with 2,000 troops on 1,000 tiles has D = 2. A plains tile costs 6 + 1.5 × 2 = 9 troops. A hill tile inside a Fort's range costs 6 + 1.5 × 2 × 1.5 × 1.6 = 13.2 troops. The flat 6 means even a thinly held empire costs real troops to conquer, so Crowns can't be snatched for almost nothing right after the land rush.
 
 ### Terrain
 
@@ -96,7 +96,7 @@ Your Crown is your life: lose its centre tile and you're out. It's well defended
 **Defending it**
 
 - Crown tiles have ×3 defense, and the **Crown zone** (all your tiles within 6 tiles of the centre) has ×1.5.
-- Crown tiles use their own defense and ignore the ×4 building cap. The zone bonus counts as building defense, so it stacks with Forts up to the cap.
+- Crown tiles use their own defense and ignore the ×3.5 building cap. The zone bonus counts as building defense, so it stacks with Forts up to the cap.
 - When an enemy attack reaches your Crown zone, you get a banner, a vibration, and a "Crown under attack" alert. Tap it to jump the camera there.
 
 **Keep upgrades** (tap your Crown to buy them)
@@ -128,16 +128,16 @@ Buildings cost troops, so every Fort is land you didn't grab. Limits and rising 
 - Long-press your own land to open the build menu.
 - You can't build within 3 tiles of an enemy border, so you can't drop a Fort in the middle of a fight.
 - If an enemy captures a building's tile, the building is destroyed and the attacker gets 25% of its cost back as loot.
-- Building defense multiplies together (Fort × Wall × Crown zone) and is capped at ×4. Terrain defense multiplies on top, so the toughest normal tile is a walled hill inside Fort II range: 1.5 × 4 = ×6.
+- Building defense multiplies together (Fort × Wall × Crown zone) and is capped at ×3.5. Terrain defense multiplies on top, so the toughest normal tile is a walled hill inside Fort II range: 1.5 × 3.5 = ×5.25.
 
 | Building | Cost (troops) | Effect | Limit | Notes |
 | --- | --- | --- | --- | --- |
-| Fort | 300, then +150 for each Fort you own | Your tiles within 8 tiles get ×1.6 defense | 6 | Upgrade to Fort II for 400: radius 10, ×2.0 |
+| Fort | 400, then +150 for each Fort you own | Your tiles within 8 tiles get ×1.6 defense | 6 | Upgrade to Fort II for 400: radius 10, ×2.0 |
 | Wall | 4 per tile | Drag a line on your own land; each wall tile gets ×2.5 defense | 400 tiles | Drawn as a thick dark border line |
 | Barracks | 400, then +200 each | Troop cap +10% | 4 | Unlocks at 1:00 |
 | Port | 250 | Launch boat attacks from this coast | 3 | Must touch water |
 
-**Boats.** Tap one of your Ports, then tap a free or enemy coast tile across the water (up to 60 tiles away). A boat carries the troops from your send slider at 8 tiles per second along a water path. When it lands, it claims the landing tile and continues as a normal expansion or attack from there. If the troops can't pay for the landing tile, the boat is lost. Ports matter most on Archipelago maps.
+**Boats.** Tap one of your Ports, then tap a free or enemy coast tile across the water (up to 120 tiles away). A boat carries the troops from your send slider at 8 tiles per second along a water path. When it lands, it claims the landing tile and continues as a normal expansion or attack from there. If the troops can't pay for the landing tile, the boat is lost. Ports matter most on Archipelago maps.
 
 ## Abilities
 
@@ -190,8 +190,10 @@ Each bot also gets a personality, so matches feel different:
 | --- | --- | --- |
 | Expander | Grabs free land fast; attacks once free land runs out | Thin defenses |
 | Raider | Attacks its weakest neighbour; races for Ruins | Overextends and runs low on troops |
-| Turtle | Builds Forts, Walls and Keep upgrades early; counterattacks | Grows slowly |
+| Turtle | Builds Forts, Walls and Keep upgrades early; keeps a bigger troop reserve than the others; counterattacks | Grows slowly |
 | Opportunist | Attacks whoever is busy fighting someone else; breaks truces 20% of the time | Other bots stop trusting it |
+
+In the Final Siege every bot saves up to half its troop cap and then attacks with at least 70% of its troops, so the endgame is decided by real pushes instead of small trades.
 
 Bots get fantasy names built from a title and a name, like "Duke Ashford" or "Lady Vex". The default match has 7 bots with a mix of personalities. Skirmish setup offers Easy, Normal, Hard, or Mixed (3 Easy, 3 Normal, 1 Hard).
 
@@ -223,7 +225,7 @@ Map types: **Continent** (one big landmass with lakes), **Archipelago** (islands
 - **XP per match:** 100 for playing, +10 per 1% of peak land, +150 per Crown captured, +300 for a win. Hard matches give ×1.5.
 - **Levels:** level n needs 500 + 100 × n XP.
 - **Unlocks:** 16 territory colours, 6 patterns (stripes, dots, checks, waves, scales, bricks), 8 Crown icons, titles, and victory effects like fireworks.
-- **Achievements**, for example: Kingslayer (take 3 Crowns in one match), Underdog (win after being the smallest player at 3:00), Island King (win on Archipelago using 3 Ports), Speedrun (win in under 6 minutes), Dominion (win by owning 60% of the land).
+- **Achievements**, for example: Kingslayer (take 3 Crowns in one match), Underdog (win after being the smallest player at 3:00), Island King (win on Archipelago using 3 Ports), Speedrun (win in under 6 minutes), Dominion (win by owning 65% of the land).
 - **Stats screen:** matches, wins, win rate, Crowns captured, fastest win, best Daily score.
 
 If you ever earn money from the game, sell only cosmetics and "remove ads". Never sell troops, powers or upgrades, because pay-to-win ruins balance.

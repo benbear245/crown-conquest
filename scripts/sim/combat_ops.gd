@@ -297,7 +297,7 @@ static func attack_tile_cost(sim: Simulation, tile_idx: int, d_ratio: float, att
 
 
 # Non-terrain defense: Crown tile and zone, plus Fort and Wall.
-# Crown tiles ignore the x4 building cap. Final Siege weakens Crown tiles
+# Crown tiles ignore the building cap. Final Siege weakens Crown tiles
 # and disables the zone bonus and Keep upgrades. A Crown that is moving has
 # no special defense until it lands.
 static func combined_defense_at(state: GameState, tile_idx: int) -> float:
@@ -307,7 +307,7 @@ static func combined_defense_at(state: GameState, tile_idx: int) -> float:
 	var is_siege: bool = state.is_final_siege()
 	var owner_player: Player = state.get_player(owner_id)
 	var crown_active: bool = owner_player != null and owner_player.crown_move_until <= state.match_time
-	# Crown tile: its own defense, ignores the x4 cap and other buildings.
+	# Crown tile: its own defense, ignores the building cap and other buildings.
 	if crown_active and state.crown_tiles.has(tile_idx) and state.crown_tiles[tile_idx] == owner_id:
 		if is_siege:
 			return Balance.FINAL_SIEGE_CROWN_TILE_DEFENSE
