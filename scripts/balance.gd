@@ -251,6 +251,44 @@ const BOT_PERSONALITY_TURTLE: int = 2
 const BOT_PERSONALITY_OPPORTUNIST: int = 3
 const BOT_OPPORTUNIST_TRUCE_BREAK_CHANCE: float = 0.20
 
+# --- Bot AI (how bots score their moves; see scripts/sim/bots.gd) -------------
+# Difficulty only changes how fast and how well bots think, never their numbers.
+const BOT_NORMAL_WORSE_MOVE_CHANCE: float = 0.10   # Normal sometimes takes its 2nd-best move
+const BOT_HARD_WORSE_MOVE_CHANCE: float = 0.0
+const BOT_EASY_FORT_CHANCE: float = 0.15           # Easy: "Forts, rarely"
+# Bots only expand / attack once troops reach this share of their cap, so they
+# keep a defense instead of spending to zero (index = difficulty). Free land
+# pays back fast, so the bar for expanding is lower than for attacking.
+static var BOT_EXPAND_THRESHOLD: PackedFloat32Array = PackedFloat32Array([0.10, 0.20, 0.25])
+static var BOT_ATTACK_THRESHOLD: PackedFloat32Array = PackedFloat32Array([0.25, 0.35, 0.40])
+# ...adjusted by personality (Expander, Raider, Turtle, Opportunist).
+static var BOT_ACT_THRESHOLD_PERSONALITY: PackedFloat32Array = PackedFloat32Array([-0.05, -0.05, 0.10, 0.0])
+const BOT_RUSH_ACT_THRESHOLD: float = 0.05         # during the opening land rush...
+const BOT_RUSH_END_SEC: float = 45.0               # ...which ends here, so troops recover before peace ends
+const BOT_SWEET_SPOT_TARGET: float = 0.25          # Hard sends troops down to this share of its cap
+const BOT_HARD_RETREAT_STALLED_RINGS: int = 2      # Hard retreats after this many rings with no progress
+const BOT_THREAT_RADIUS: int = 14                  # enemy land this close to the Crown = threatened
+const BOT_WALL_LENGTH: int = 7
+const BOT_BUILD_TROOP_MARGIN: float = 1.3          # build only with cost x this in troops...
+const BOT_TURTLE_BUILD_TROOP_MARGIN: float = 1.05  # ...Turtles build sooner
+const BOT_BARRACKS_AT_CAP: float = 0.70            # Barracks only once troops press the cap
+const BOT_MIN_ATTACK_TILES: float = 8.0            # don't attack unless the send buys this many tiles
+const BOT_OPPORTUNIST_DISTRUST: float = 0.15       # bots accept an Opportunist's truce less often
+const BOT_SCAN_SAMPLES: int = 300                  # border tiles a bot looks at per think
+# Move scores. A move's score is its base plus personality / situation bonuses;
+# the bot takes the highest (or, by difficulty, sometimes a worse one).
+const BOT_SCORES: Dictionary = {
+	"expand": 50.0, "expand_rush": 25.0, "expand_expander": 25.0, "expand_turtle": -10.0, "ruins_raider": 20.0,
+	"attack": 30.0, "attack_per_tile": 0.25, "attack_tile_cap": 30.0, "attack_weakest": 15.0,
+	"attack_raider": 20.0, "attack_busy_opportunist": 30.0, "attack_counter_turtle": 30.0,
+	"attack_turtle_idle": -15.0, "attack_expander_free_land": -25.0, "attack_rising": 15.0,
+	"attack_crown": 12.0, "attack_again": -10.0,
+	"fort": 30.0, "fort_threat": 20.0, "fort_turtle": 25.0, "fort_expander": -15.0, "fort2": 25.0,
+	"barracks": 30.0, "barracks_full": 20.0, "keep": 30.0, "keep_threat": 15.0, "keep_turtle": 20.0, "keep_crown_hit": 40.0,
+	"wall": 55.0, "wall_turtle": 15.0, "ruins_hard": 20.0, "crown_kill_hard": 15.0, "port": 35.0, "boat": 40.0, "crown_move": 55.0,
+	"truce_pressed": 70.0, "truce_opportunist_setup": 25.0, "truce_hard_flank": 35.0, "truce_hard_peace": 45.0, "attack_busy_hard": 12.0,
+}
+
 # --- Teams -------------------------------------------------------------------
 const TEAM_SIZE: int = 2
 const TEAM_COUNT: int = 4

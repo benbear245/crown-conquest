@@ -11,6 +11,12 @@ var troops_remaining: float = 0.0
 var troops_sent: float = 0.0
 # Tiles captured on the most recent ring advance (0 means the push stalled).
 var tiles_taken_last_ring: int = 0
+# Rings in a row that captured nothing (bots retreat from these).
+var stalled_rings: int = 0
+# Cheapest front tile we couldn't afford last ring, and whether Crown Shield
+# held part of the front (then the attack waits instead of ending).
+var cheapest_blocked_cost: float = INF
+var shield_blocked: bool = false
 
 # Defender-owned tiles currently adjacent to the attacker. Advances
 # consume these next ring tick; new neighbours get added as we capture.

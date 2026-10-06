@@ -43,6 +43,7 @@ func _run_all() -> void:
 		"buildings": preload("res://scripts/tools/checks_buildings.gd"),
 		"abilities": preload("res://scripts/tools/checks_abilities.gd"),
 		"fairplay": preload("res://scripts/tools/checks_fairplay.gd"),
+		"bots": preload("res://scripts/tools/checks_bots.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):

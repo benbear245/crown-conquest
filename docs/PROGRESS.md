@@ -301,3 +301,30 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 
 **Found while profiling (fixed in Prompt 11, since it changes behaviour):** an attack whose remaining troops can't pay for any tile never ends. It keeps one of the 3 attack slots forever.
 
+## Prompt 11: Smarter bots
+
+**Built**
+- New bot brain in `scripts/sim/`: `bot_scan.gd` (what the bot sees: a sample of its border, free land / Ruins, neighbours, threats, who is busy fighting), `bot_moves.gd` (every possible move with a score), `bot_places.gd` (where to put Forts, walls, Ports, boat landings, a moved Crown), `bot_abilities.gd` (when to press abilities), `bots.gd` (pick and carry out). All numbers and score weights live in `balance.gd` ("Bot AI" section).
+- Each think a bot lists its moves (expand, attack each neighbour, Fort, Fort II, Barracks, Keep, walls, Port, boat, Crown move, offer a truce), scores them, and takes the best. **Easy** makes a random move 20% of the time, **Normal** takes its second-best 10% of the time, **Hard** always takes its best.
+- Difficulty table, as designed: Easy thinks every 2.5 s and sends 20–40%, uses Forts rarely, and never attacks your Crown before 4:00 (checked every tick). Normal 1.5 s / 30–60%, Forts + Barracks + Keep 1 + Swift March + Crown Shield, looks for weak borders. Hard 0.8 s / 40–80%, uses everything (walls, Fort II, all Keeps, Ports and boats, Crown move, all four abilities), stays near the sweet spot, combines Bombard + Rally on Crowns, retreats from attacks that stopped making progress.
+- Personalities: Expanders grab free land and only attack once it runs out; Raiders hit their weakest neighbour with the top of their send range and race for Ruins; Turtles keep more troops, build Forts / walls / Keeps early and counterattack whoever attacks them; Opportunists attack whoever is busy fighting someone else, break 20% of their truces, and other bots trust them less.
+- Bots keep a defense: they only expand or attack once their troops reach a share of their cap (Easy lowest, Hard highest), and buildings can't take them below it. Without this, bots spent down to ~0.2 troops per tile and Crowns fell almost for free.
+- Hard bots also avoid being the softest target around, hold their troops while their Crown is under attack, and offer truces to their strongest neighbour so they don't fight on two fronts.
+- Fixed (found while profiling): an attack that couldn't pay for any tile on its front never ended and blocked one of your 3 attack slots forever. It now ends like a retreat (75% back), unless it's only waiting out a Crown Shield.
+
+**Simulator: 50 matches, Medium map, 8 bots, Mixed** (full report: `reports/balance_2026-10-06_smarter_bots.md`)
+
+| Personality | Wins | | Difficulty | Wins |
+| --- | --- | --- | --- | --- |
+| Expander | 14 (28%) | | Easy (3 bots/match) | 7 (14%) |
+| Raider | 9 (18%) | | Normal (4 bots/match) | 24 (48%) |
+| Turtle | 18 (36%) | | Hard (1 bot/match) | 19 (38%) |
+| Opportunist | 9 (18%) | | | |
+
+1 Hard bot vs 7 Easy bots: Hard wins **42% of 100** (target ≥ 40%). Matches are still short (median 5:01, target 7–11 min) and Ports are only used in 24% of matches: those are balance numbers for Prompt 17.
+
+**What to test**
+- Easy bots: they shouldn't push into your Crown zone before 4:00 even if you're weak.
+- Hard bots: watch for Bombard + Rally on a Crown, walls appearing in front of their Crown, and truce offers to you while they fight someone else.
+- Long-press bots of different personalities: Turtles have Forts and walls, Raiders throw big attacks at the weakest neighbour.
+

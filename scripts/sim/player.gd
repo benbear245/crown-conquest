@@ -31,6 +31,10 @@ var expansion_timer: float = 0.0        # seconds until the next ring tick
 
 # Bot think cadence (ignored for the local player).
 var think_timer: float = 0.0
+# The bot's most recent BotScan (what it saw on its last think).
+var bot_scan: RefCounted = null
+# Bot move counts by type ("expand", "attack", ...), for the simulator report.
+var bot_actions: Dictionary = {}
 
 # HUD alert when an attack enters this player's Crown zone.
 var crown_alert_until: float = 0.0

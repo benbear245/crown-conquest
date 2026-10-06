@@ -137,25 +137,37 @@ func run(t: SmokeTest) -> void:
 		t.check(true, "(no enemy border yet near the player — near-border check skipped) [alive %s land %d t=%.0f phase %d]" % [me.is_alive, me.land, t.sim.state.match_time, t.sim.state.phase])
 
 	# --- Crown move (3:00+) ----------------------------------------------------
-	t.ff_safe(maxf(0.0, Balance.CROWN_MOVE_UNLOCK_SEC - t.sim.state.match_time + 1.0))
+	# Fresh match; jump the clock to 3:01 (this checks the move itself).
+	t.new_match(Balance.MAP_SIZE_MEDIUM, Balance.MAP_TYPE_CONTINENT, 4343)
+	t.skip_placement()
+	t.ff(2.0, false)
 	me = t.me()
-	if me.is_alive:
-		me.troops = 3000.0
-		var target: Vector2i = t.find_own_tile(Vector2i(me.crown_x, me.crown_y), 30,
-			func(ti: int) -> bool:
-				var p2: Vector2i = t.sim.state.idx_to_xy(ti)
-				return (absi(p2.x - me.crown_x) > 3 or absi(p2.y - me.crown_y) > 3) and CrownsOps.move_block_reason(t.sim, me, p2.x, p2.y) == "")
-		if target.x >= 0:
-			t.check(t.sim.player_move_crown(me.id, target.x, target.y), "Crown moves to a valid spot")
-			var centre_ti: int = t.sim.state.idx(target.x, target.y)
-			var fort_only: float = BuildingsOps.best_fort_defense_at(t.sim.state, me, centre_ti)
-			t.check(is_equal_approx(t.sim.combined_defense_at(centre_ti), fort_only), "moving Crown has no Crown/zone defense (x%.1f, Forts only)" % fort_only)
-			t.check(is_equal_approx(me.troops, 3000.0 - 600.0), "move cost 20% of troops")
-			t.ff(Balance.CROWN_MOVE_DURATION_SEC + 0.2)
-			t.check(t.sim.combined_defense_at(centre_ti) >= 4.0, "after 5 s the Crown is defended again (Keep carries over)")
-			t.check(not t.sim.player_move_crown(me.id, crown.x, crown.y), "only one move per match")
-		else:
-			t.check(true, "(no valid Crown-move spot on this map — move check skipped)")
+	var st2: GameState = t.sim.state
+	for dy in range(-18, 19):
+		for dx in range(-18, 19):
+			var bx: int = me.crown_x + dx
+			var by: int = me.crown_y + dy
+			if dx * dx + dy * dy <= 18 * 18 and st2.in_bounds(bx, by) and st2.blocked[st2.idx(bx, by)] == 0:
+				TerritoryOps.claim_tile(t.sim, me.id, bx, by)
+	t.check(not t.sim.player_move_crown(me.id, me.crown_x + 6, me.crown_y), "Crown move is locked before 3:00")
+	st2.match_time = Balance.CROWN_MOVE_UNLOCK_SEC + 1.0
+	me.troops = 3000.0
+	me.keep_level = 1
+	var target: Vector2i = t.find_own_tile(Vector2i(me.crown_x, me.crown_y), 30,
+		func(ti: int) -> bool:
+			var p2: Vector2i = st2.idx_to_xy(ti)
+			return (absi(p2.x - me.crown_x) > 3 or absi(p2.y - me.crown_y) > 3) and CrownsOps.move_block_reason(t.sim, me, p2.x, p2.y) == "")
+	t.check(target.x >= 0, "found a safe spot 10+ tiles from enemies")
+	if target.x >= 0:
+		var old_crown := Vector2i(me.crown_x, me.crown_y)
+		t.check(t.sim.player_move_crown(me.id, target.x, target.y), "Crown moves to a valid spot")
+		var centre_ti: int = st2.idx(target.x, target.y)
+		var fort_only: float = BuildingsOps.best_fort_defense_at(st2, me, centre_ti)
+		t.check(is_equal_approx(t.sim.combined_defense_at(centre_ti), fort_only), "moving Crown has no Crown/zone defense for 5 s")
+		t.check(is_equal_approx(me.troops, 3000.0 - 600.0), "move cost 20% of troops")
+		t.ff(Balance.CROWN_MOVE_DURATION_SEC + 0.2, false)
+		t.check(t.sim.combined_defense_at(centre_ti) >= 4.0, "after 5 s the Crown is defended again (Keep 1 carries over)")
+		t.check(not t.sim.player_move_crown(me.id, old_crown.x, old_crown.y), "only one move per match")
 
 	await _boat_checks(t)
 

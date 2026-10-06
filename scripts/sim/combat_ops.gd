@@ -119,6 +119,14 @@ static func tick_attacks(sim: Simulation) -> void:
 		if a.troops_remaining <= 0.0 or a.front.is_empty():
 			state.attacks.remove_at(i)
 			continue
+		# Stalled: took nothing and can't pay for any tile on the front (and
+		# it isn't just waiting out a Crown Shield). It ends like a retreat.
+		if a.tiles_taken_last_ring == 0 and not a.shield_blocked and a.troops_remaining < a.cheapest_blocked_cost:
+			var attacker: Player = state.get_player(a.attacker_id)
+			if attacker != null:
+				attacker.troops += a.troops_remaining * Balance.RETREAT_RETURN_FRACTION
+			state.attacks.remove_at(i)
+			continue
 		i += 1
 
 
@@ -159,6 +167,8 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 	var rising_on: bool = attacker != null and rising > 0 and a.defender_id == rising and a.attacker_id != rising
 	var new_front: Dictionary = {}
 	a.tiles_taken_last_ring = 0
+	a.cheapest_blocked_cost = INF
+	a.shield_blocked = false
 	for ni: int in a.front.keys():
 		if owners[ni] != a.defender_id:
 			continue
@@ -173,6 +183,7 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 		# Crown Shield: can't take tiles inside the defender's Crown zone.
 		if shield_active and cx >= 0 and in_zone:
 			new_front[ni] = true
+			a.shield_blocked = true
 			continue
 		# --- tile cost ---
 		var extra_def: float
@@ -198,6 +209,8 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 			cost *= (1.0 - Balance.RISING_EMPIRE_ATTACK_DISCOUNT)
 		if a.troops_remaining < cost:
 			new_front[ni] = true
+			if cost < a.cheapest_blocked_cost:
+				a.cheapest_blocked_cost = cost
 			continue
 		# --- capture ---
 		a.troops_remaining -= cost
@@ -224,6 +237,7 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 			new_front[ni - w] = true
 	a.front = new_front
 	a.zone_cache_valid = false
+	a.stalled_rings = 0 if a.tiles_taken_last_ring > 0 else a.stalled_rings + 1
 
 
 # The defender's Forts as flat [x, y, r^2, mult] entries.

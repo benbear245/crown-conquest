@@ -200,4 +200,7 @@ static func bot_accepts(sim: Simulation, bot: Player, offerer: Player) -> bool:
 			break
 	if float(offerer.land) > float(bot.land) * Balance.TRUCE_ACCEPT_BIGGER_RATIO:
 		chance += Balance.TRUCE_ACCEPT_BIGGER_BONUS
+	# Other bots don't fully trust Opportunists.
+	if offerer.is_bot and offerer.personality == Balance.BOT_PERSONALITY_OPPORTUNIST:
+		chance -= Balance.BOT_OPPORTUNIST_DISTRUST
 	return state.rng.randf() < clampf(chance, 0.0, 1.0)
