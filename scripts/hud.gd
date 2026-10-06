@@ -46,6 +46,9 @@ var truce_panel: TrucePanel
 var leaderboard: Leaderboard
 var ally_panel: AllyPanel
 var pause_menu: PauseMenu
+# Tutorial pieces (only in the tutorial). First-time tips stay quiet meanwhile.
+var tutorial_card: TutorialCard
+var tutorial_arrow: TutorialArrow
 
 
 func _ready() -> void:
@@ -96,6 +99,23 @@ func close_panels() -> void:
 	enemy_panel.close_panel()
 
 
+func add_tutorial(card: TutorialCard, arrow: TutorialArrow) -> void:
+	tutorial_card = card
+	tutorial_arrow = arrow
+	_alert_column.add_child(card)
+	_alert_column.move_child(card, 0)
+	add_child(arrow)
+	move_child(arrow, end_overlay.get_index())   # under the end screen and pause menu
+
+
+func remove_tutorial() -> void:
+	for n: Node in [tutorial_card, tutorial_arrow]:
+		if n != null:
+			n.queue_free()
+	tutorial_card = null
+	tutorial_arrow = null
+
+
 # Gold banner + sound when an achievement is earned.
 func show_achievement(id: String) -> void:
 	var a: Dictionary = Progression.achievement(id)
@@ -108,6 +128,8 @@ func show_achievement(id: String) -> void:
 
 # Shows a short tip the first time an action happens.
 func hint(id: String) -> void:
+	if tutorial_card != null:
+		return
 	if Hints.TEXT.has(id) and Settings.first_time("hint_" + id):
 		alerts.push(Hints.TEXT[id], "info", 6.0, "hint_" + id)
 
@@ -284,10 +306,10 @@ func consume_events(events: Array) -> void:
 
 
 func _update_placement() -> void:
-	_placement_msg.visible = _state.phase == Balance.PHASE_PLACEMENT
+	_placement_msg.visible = _state.phase == Balance.PHASE_PLACEMENT and tutorial_card == null
 	if _placement_msg.visible:
 		var text: String = "Tap plains, forest or hills to place your Crown"
-		if not _state.timer_off:
+		if not _state.tutorial_rules:
 			text += "  (%ds)" % maxi(0, ceili(_state.placement_time_left))
 		var ally: Player = _sim.ally_of(_state.get_player(_sim.local_player_id))
 		if ally != null:

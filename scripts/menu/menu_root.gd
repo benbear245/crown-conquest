@@ -28,6 +28,8 @@ func _ready() -> void:
 	_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_holder)
 	Audio.music("music_calm_loop")
+	if Session.start_tutorial_if_new():
+		return
 	show_screen(Session.return_screen if Session.return_screen != "" else "main")
 	Session.return_screen = ""
 

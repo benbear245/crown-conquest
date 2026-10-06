@@ -69,8 +69,9 @@ var win_reason: String = ""
 var resolved_map_type: int = 0
 # Teams mode: players have a team and an ally (see Player.team / ally_id).
 var teams_mode: bool = false
-# Tutorial: no placement countdown, no Final Siege and no 15:00 limit.
-var timer_off: bool = false
+# Tutorial: no placement countdown, no Final Siege, no 15:00 limit and no
+# Dominion win: the tutorial match ends when a Crown falls.
+var tutorial_rules: bool = false
 # Top-of-screen banner shown by the HUD until the expiry.
 var active_announcement_text: String = ""
 var active_announcement_until: float = 0.0
@@ -104,7 +105,7 @@ static func format_int(n: int) -> String:
 
 
 func is_final_siege() -> bool:
-	return match_time >= Balance.FINAL_SIEGE_START_SEC and not timer_off
+	return match_time >= Balance.FINAL_SIEGE_START_SEC and not tutorial_rules
 
 
 func configure(w: int, h: int, new_seed: int) -> void:
@@ -134,7 +135,7 @@ func configure(w: int, h: int, new_seed: int) -> void:
 	winner_team = -1
 	win_reason = ""
 	teams_mode = false
-	timer_off = false
+	tutorial_rules = false
 	active_announcement_text = ""
 	active_announcement_until = 0.0
 	tick_count = 0

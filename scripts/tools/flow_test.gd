@@ -17,11 +17,37 @@ func _ready() -> void:
 	await get_tree().process_frame
 	get_tree().current_scene = dummy
 	var saved_setup: Dictionary = Settings.last_setup.duplicate(true)
+	var saved_data: Dictionary = SaveData.data.duplicate(true)
+	await _first_launch()
 	await _run()
 	Settings.last_setup = saved_setup
 	Settings.save_settings()
+	SaveData.data = saved_data
+	SaveData.save()
 	print("[flow] %d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
+
+
+# A brand-new player: the tutorial starts by itself; Skip goes to the menu
+# and it doesn't start again.
+func _first_launch() -> void:
+	SaveData.data = SaveData.defaults()
+	Session.booted = false
+	get_tree().change_scene_to_file(ProjectSettings.get_setting("application/run/main_scene"))
+	await _frames(5)
+	var game: Node = get_tree().current_scene
+	var tut: Tutorial = game.get("_tutorial") if game != null and game.has_method("pause_game") else null
+	_check(tut != null, "first launch starts the tutorial")
+	if tut == null:
+		return
+	game.set("auto_pause", false)
+	(tut.card.get("_skip") as Button).pressed.emit()
+	await _frames(4)
+	_check(get_tree().current_scene is MenuRoot and bool(SaveData.data.profile.get("tutorial_done", false)), "Skip goes to the main menu and remembers it")
+	Session.booted = false
+	get_tree().change_scene_to_file(ProjectSettings.get_setting("application/run/main_scene"))
+	await _frames(4)
+	_check(get_tree().current_scene is MenuRoot, "next launch opens the menu, not the tutorial")
 
 
 func _run() -> void:

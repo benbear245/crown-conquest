@@ -61,6 +61,11 @@ func close_menu() -> void:
 	_tile = Vector2i(-1, -1)
 
 
+# The button for a row (ROW_FORT, ...), e.g. for the tutorial's arrow.
+func row_button(row: int) -> Button:
+	return _rows[row] if row >= 0 and row < _rows.size() else null
+
+
 func selected_tile() -> Vector2i:
 	return _tile if visible else Vector2i(-1, -1)
 

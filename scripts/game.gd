@@ -20,6 +20,7 @@ var _simulation: Simulation
 var _config: MatchConfig
 var _result_recorded: bool = false
 var _tracker: MatchTracker
+var _tutorial: Tutorial
 var _match_achievements: Array[String] = []   # earned this match (shown at the end)
 var _targeting: Targeting
 var _touch: TouchInput = TouchInput.new()
@@ -70,6 +71,7 @@ func _bind_match() -> void:
 	_match_achievements.clear()
 	_result_recorded = false
 	_targeting.exit()
+	_setup_tutorial()
 	_hud.hint("placement")
 
 
@@ -274,7 +276,12 @@ func pause_game() -> void:
 	_targeting.exit()
 	_hud.close_panels()
 	get_tree().paused = true
-	_hud.pause_menu.open(_config.describe() if _config.mode != MatchConfig.Mode.DAILY else "Daily Challenge " + _config.daily_date)
+	var subtitle: String = _config.describe()
+	if _config.mode == MatchConfig.Mode.DAILY:
+		subtitle = "Daily Challenge " + _config.daily_date
+	elif _config.mode == MatchConfig.Mode.TUTORIAL:
+		subtitle = "Tutorial"
+	_hud.pause_menu.open(subtitle)
 
 
 func resume_game() -> void:
@@ -313,14 +320,14 @@ func _record_result_once() -> void:
 	if not over_for_me:
 		return
 	_result_recorded = true
-	if _config.mode == MatchConfig.Mode.TUTORIAL:
+	if _mode() == MatchConfig.Mode.TUTORIAL:
 		return
 	var summary: Dictionary = SaveData.record_match(_tracker.result())
 	for id: String in summary.new_achievements:
 		_match_achievements.append(id)
 		_hud.show_achievement(id)
 	_hud.end_overlay.show_progress(summary, _match_achievements)
-	if _config.mode == MatchConfig.Mode.DAILY:
+	if _mode() == MatchConfig.Mode.DAILY:
 		var score: int = _simulation.daily_score()
 		var bonus: int = _simulation.daily_time_bonus()
 		var new_best: bool = SaveData.submit_daily(_config.daily_date, score)
@@ -329,10 +336,28 @@ func _record_result_once() -> void:
 		_hud.end_overlay.extra_text = text
 
 
+# The tutorial runs only in tutorial matches.
+func _setup_tutorial() -> void:
+	if _mode() == MatchConfig.Mode.TUTORIAL:
+		if _tutorial == null:
+			_tutorial = Tutorial.new()
+			add_child(_tutorial)
+		_tutorial.setup(self, _simulation, _hud, _camera)
+	elif _tutorial != null:
+		_tutorial.teardown()
+		_tutorial.queue_free()
+		_tutorial = null
+
+
+# The mode of the match being played (Skirmish when started without a config).
+func _mode() -> int:
+	return _simulation.config.mode if _simulation.config != null else MatchConfig.Mode.SKIRMISH
+
+
 # Achievements that can happen mid-match (Kingslayer, Siege Lord) pop up
 # right away.
 func _observe_achievements(events: Array) -> void:
-	if _tracker == null or _config.mode == MatchConfig.Mode.TUTORIAL:
+	if _tracker == null or _mode() == MatchConfig.Mode.TUTORIAL:
 		return
 	for id: String in _tracker.observe(events):
 		if SaveData.unlock_achievement(id):

@@ -96,6 +96,11 @@ func _stat(text: String, w: int) -> Label:
 	return lbl
 
 
+# Where the troop bar is on screen (for the tutorial's arrow).
+func troop_bar_rect() -> Rect2:
+	return _bar_bg.get_global_rect()
+
+
 func setup(sim: Simulation) -> void:
 	_sim = sim
 
@@ -134,7 +139,7 @@ func update_view() -> void:
 		_land_label.text = "%.1f%%" % (100.0 * st.land_fraction(p))
 	match st.phase:
 		Balance.PHASE_PLACEMENT:
-			_timer_label.text = "Placement 0:%02d" % maxi(0, ceili(st.placement_time_left))
+			_timer_label.text = "Place your Crown" if st.tutorial_rules else "Placement 0:%02d" % maxi(0, ceili(st.placement_time_left))
 		Balance.PHASE_MATCH:
 			if st.match_time < Balance.PEACE_PERIOD_SEC:
 				_timer_label.text = "Peace ends %s" % GameState.format_time(Balance.PEACE_PERIOD_SEC - st.match_time)

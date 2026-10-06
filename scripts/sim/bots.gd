@@ -17,7 +17,8 @@ static func tick(sim: Simulation, player: Player) -> void:
 			BotAbilities.think(sim, player)
 	# Easy bots won't attack a human's Crown before 4:00 (checked every tick so
 	# a fast push can't slip into the Crown zone between thinks).
-	if player.difficulty == Balance.BOT_DIFFICULTY_EASY and state.match_time < Balance.BOT_EASY_NO_CROWN_ATTACK_BEFORE_SEC:
+	# (In the tutorial it never does.)
+	if player.difficulty == Balance.BOT_DIFFICULTY_EASY and (state.match_time < Balance.BOT_EASY_NO_CROWN_ATTACK_BEFORE_SEC or state.tutorial_rules):
 		_easy_spare_human_crowns(sim, player)
 	player.think_timer -= Balance.TICK_DELTA
 	if player.think_timer > 0.0:

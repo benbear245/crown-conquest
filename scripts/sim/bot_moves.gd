@@ -164,9 +164,9 @@ static func _attacks(sim: Simulation, p: Player, scan: BotScan, out: Array[Dicti
 		out.append(m)
 
 
-# Easy bots won't attack a human player's Crown before 4:00.
+# Easy bots won't attack a human player's Crown before 4:00 (never in the tutorial).
 static func _easy_spares_crown(state: GameState, e: Player, tile: int) -> bool:
-	if e.is_bot or e.crown_x < 0 or state.match_time >= Balance.BOT_EASY_NO_CROWN_ATTACK_BEFORE_SEC:
+	if e.is_bot or e.crown_x < 0 or (state.match_time >= Balance.BOT_EASY_NO_CROWN_ATTACK_BEFORE_SEC and not state.tutorial_rules):
 		return false
 	var tp: Vector2i = state.idx_to_xy(tile)
 	var r: int = e.crown_zone_radius() + 3

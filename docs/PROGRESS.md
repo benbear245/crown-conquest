@@ -410,3 +410,24 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 - Take 3 Crowns in one match: the Kingslayer banner appears straight away.
 - Customize: pick a colour, pattern and Crown; check the preview, then start a match and find your land and Crown. Try the Title tab after earning an achievement.
 - Stats and Achievements screens after a few matches; close and reopen the game to check everything was saved.
+
+## Prompt 16: Tutorial
+
+**Built**
+- An interactive tutorial (`scripts/tutorial.gd`) on a Small map with 1 Easy bot and no timers: no placement countdown, no Final Siege, no 15:00 limit and no Dominion win — it ends when a Crown falls. The tutorial bot never goes for your Crown (it's a lesson, not a trap).
+- 7 steps, each with a gold card at the top ("Tutorial · Step 3 of 7") and a bouncing arrow that points at exactly what to tap; arrows to things off screen sit at the screen edge pointing the way. Each step waits until you've done it:
+  1. Place your Crown (the arrow suggests a spot near the bot so you meet sooner).
+  2. Expand: tap free land; grow 25 tiles.
+  3. Watch the troop bar's sweet spot (the arrow points at the bar; passes when it glows green).
+  4. Attack the bot (says how long the peace period has left, and to grow towards the bot until your borders touch).
+  5. Build a Fort: long-press your land facing the bot; with the build menu open the arrow moves to the Fort button.
+  6. Use Crown Shield (arrow on the button).
+  7. Take the bot's Crown (camera jumps to it, arrow on it).
+- **Skip tutorial** is on the card the whole time. Finishing shows "Tutorial complete!" with Play a Skirmish / Main menu; losing your Crown shows Try again.
+- It starts by itself the first time the game opens (until you finish or skip it once) and can be replayed from **Settings → Replay tutorial**. First-time tips stay quiet during the tutorial, and the tutorial gives no XP or stats.
+- New smoke suite `tutorial` (34 checks: walks all 7 steps with real taps and long-presses, Try again, the no-timer rules) and 3 more flow checks (first launch starts the tutorial, Skip returns to the menu, the next launch opens the menu). All 311 smoke checks + 13 flow checks pass; solo matches still play out identically.
+
+**What to test**
+- Delete your save (or use a fresh install) and launch: the tutorial should start. Follow every step on your phone; check the arrow always points somewhere sensible, especially for the long-press Fort step.
+- Skip it, restart the game: it shouldn't come back. Then Settings → Replay tutorial.
+- Is anything confusing in the step texts? They're all in `scripts/tutorial.gd` (`_update_text`).

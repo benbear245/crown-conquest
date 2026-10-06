@@ -10,6 +10,8 @@ const GAME_SCENE: String = "res://scenes/main.tscn"
 var config: MatchConfig = null
 # Menu screen to show when coming back from a match ("" = main screen).
 var return_screen: String = ""
+# False until the menu has shown once this run (the first launch check).
+var booted: bool = false
 
 
 func play(cfg: MatchConfig) -> void:
@@ -22,6 +24,18 @@ func to_menu(screen: String = "") -> void:
 	return_screen = screen
 	get_tree().paused = false
 	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+# First time the menu opens in this run: start the tutorial if it was never
+# finished or skipped. Returns true if it did.
+func start_tutorial_if_new() -> bool:
+	if booted:
+		return false
+	booted = true
+	if bool(SaveData.data.profile.get("tutorial_done", false)):
+		return false
+	play.call_deferred(MatchConfig.tutorial())
+	return true
 
 
 # The config for the game scene: the one the menus chose, or a default

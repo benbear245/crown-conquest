@@ -108,6 +108,8 @@ func update_view() -> void:
 	var state: GameState = _sim.state
 	var me: Player = state.get_player(_sim.local_player_id)
 	var should_show: bool = state.phase == Balance.PHASE_ENDED or (me != null and not me.is_alive)
+	if _sim.config != null and _sim.config.mode == MatchConfig.Mode.TUTORIAL:
+		should_show = false   # the tutorial card handles the ending
 	if not should_show or _current_id() == _dismissed_id:
 		visible = false
 		return

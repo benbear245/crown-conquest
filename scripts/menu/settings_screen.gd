@@ -14,4 +14,10 @@ func _init(menu_root: MenuRoot) -> void:
 	tips.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	tips.pressed.connect(func() -> void: Settings.reset_hints(); tips.text = "Tips will show again")
 	add_child(tips)
+	var tutorial := UIStyle.button("Replay tutorial", 480)
+	tutorial.name = "ReplayTutorial"
+	tutorial.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tutorial.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	tutorial.pressed.connect(func() -> void: Session.play(MatchConfig.tutorial()))
+	add_child(tutorial)
 	add_child(back_and_action_row("", Callable()))

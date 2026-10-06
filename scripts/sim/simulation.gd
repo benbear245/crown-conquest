@@ -42,7 +42,7 @@ func start_with(cfg: MatchConfig, match_seed: int) -> void:
 	if cfg.mode == MatchConfig.Mode.TEAMS:
 		_setup_teams(cfg)
 	elif cfg.mode == MatchConfig.Mode.TUTORIAL:
-		state.timer_off = true
+		state.tutorial_rules = true
 
 
 func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> void:
@@ -185,7 +185,7 @@ func _announce_final_siege_once() -> void:
 
 
 func _tick_placement() -> void:
-	if not state.timer_off:
+	if not state.tutorial_rules:
 		state.placement_time_left -= Balance.TICK_DELTA
 	# Bots place as soon as they get a chance (first tick that reaches them).
 	# In Teams, a bot places next to its ally (a human's ally waits for them).
@@ -205,7 +205,7 @@ func _tick_placement() -> void:
 	var all_placed: bool = true
 	for p: Player in state.players:
 		all_placed = all_placed and p.crown_x >= 0
-	if state.placement_time_left <= 0.0 or (state.timer_off and all_placed):
+	if state.placement_time_left <= 0.0 or (state.tutorial_rules and all_placed):
 		state.phase = Balance.PHASE_MATCH
 
 
@@ -259,10 +259,10 @@ func _check_win_conditions() -> void:
 			end_match(0, "Draw")
 		return
 	for p: Player in alive:
-		if state.land_fraction(p) >= Balance.DOMINION_WIN_FRACTION:
+		if state.land_fraction(p) >= Balance.DOMINION_WIN_FRACTION and not state.tutorial_rules:
 			end_match(p.id, "Dominion win (60%+ of the usable map)")
 			return
-	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC and not state.timer_off:
+	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC and not state.tutorial_rules:
 		var leader: Player = alive[0]
 		for p: Player in alive:
 			if p.land > leader.land:
@@ -291,7 +291,7 @@ func _check_team_win_conditions() -> void:
 		if float(team_land(team)) / usable >= Balance.TEAM_DOMINION_WIN_FRACTION:
 			_end_team_match(team, alive_teams[team], "Team Dominion (%d%%+ of the usable map)" % roundi(Balance.TEAM_DOMINION_WIN_FRACTION * 100.0))
 			return
-	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC and not state.timer_off:
+	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC and not state.tutorial_rules:
 		var lead_team: int = -1
 		for team: int in alive_teams.keys():
 			if lead_team < 0 or team_land(team) > team_land(lead_team):

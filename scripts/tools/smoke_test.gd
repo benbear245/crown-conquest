@@ -31,6 +31,7 @@ func _ready() -> void:
 	# Tests start from a fresh profile; the real save is put back at the end.
 	_save_backup = SaveData.data.duplicate(true)
 	SaveData.data = SaveData.defaults()
+	Session.booted = true    # menus opened by tests must not jump into the tutorial
 	game = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(game)
 	await get_tree().process_frame
@@ -55,6 +56,7 @@ func _run_all() -> void:
 		"feel": preload("res://scripts/tools/checks_feel.gd"),
 		"menus": preload("res://scripts/tools/checks_menus.gd"),
 		"progression": preload("res://scripts/tools/checks_progression.gd"),
+		"tutorial": preload("res://scripts/tools/checks_tutorial.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):
