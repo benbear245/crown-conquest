@@ -31,7 +31,9 @@ func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> voi
 	_final_siege_announced = false
 	var dims := MapGen.dims_for_size(size)
 	state.configure(dims.x, dims.y, match_seed)
+	state.track_dirty = not headless
 	MapGen.generate(state, mt)
+	state.finalize_terrain()
 	if num_bots < 0:
 		num_bots = MapGen.players_for_size(size) - 1
 	_setup_players(num_bots)

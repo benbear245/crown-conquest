@@ -9,6 +9,9 @@ var height: int = Balance.MAP_MEDIUM_HEIGHT
 
 var terrain: PackedByteArray = PackedByteArray()
 var owners: PackedByteArray = PackedByteArray()      # 0 = unowned; 255 = Ruins
+# 1 where the terrain can't be owned (mountains, water). Filled once by
+# finalize_terrain() so hot loops avoid the per-tile terrain lookup.
+var blocked: PackedByteArray = PackedByteArray()
 var players: Array[Player] = []
 
 const RUINS_OWNER_ID: int = 255
@@ -16,6 +19,8 @@ const RUINS_OWNER_ID: int = 255
 # Set of tile indices changed since the last Map.render() call.
 # Keys are tile indices; values are always true. Cleared by the renderer.
 var dirty_tiles: Dictionary = {}
+# Headless runs (balance simulator) have no renderer to clear dirty_tiles.
+var track_dirty: bool = true
 
 var tick_count: int = 0
 var match_seed: int = 0
@@ -148,7 +153,17 @@ func set_owner(x: int, y: int, owner_id: int) -> void:
 func set_owner_idx(i: int, owner_id: int) -> void:
 	if owners[i] != owner_id:
 		owners[i] = owner_id
-		dirty_tiles[i] = true
+		if track_dirty:
+			dirty_tiles[i] = true
+
+
+# Call once after map generation (terrain is fixed after that).
+func finalize_terrain() -> void:
+	blocked = PackedByteArray()
+	blocked.resize(terrain.size())
+	for i in range(terrain.size()):
+		blocked[i] = 1 if is_blocked_terrain(terrain[i]) else 0
+	_usable_tiles = -1
 
 
 func get_terrain_at(x: int, y: int) -> int:

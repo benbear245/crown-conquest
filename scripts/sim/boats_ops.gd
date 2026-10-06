@@ -162,6 +162,7 @@ static func _land_on_enemy(sim: Simulation, p: Player, b: Boat, ti: int, defende
 			a.troops_remaining += b.troops
 			a.troops_sent += b.troops
 			a.front[ti] = true
+			a.zone_cache_valid = false
 			return
 	if CombatOps.active_attack_count(state, p.id) >= Balance.MAX_SIMULTANEOUS_ATTACKS:
 		return

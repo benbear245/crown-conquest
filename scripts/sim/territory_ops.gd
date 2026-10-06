@@ -60,16 +60,23 @@ static func expand_one_ring(sim: Simulation, player: Player) -> void:
 		refund_expansion(player)
 		return
 	var discount: float = claim_discount(sim, player)
+	var claim_costs: PackedFloat32Array = Balance.TERRAIN_CLAIM_COST
+	var terrain: PackedByteArray = state.terrain
+	var w: int = state.width
 	var min_cost: float = INF
 	for ni: int in frontier:
-		var cost: float = claim_cost_idx(state, ni, state.owners[ni]) * discount
+		# Same maths as claim_cost_idx(): (base x terrain) [x ruins] x discount.
+		var cost: float = Balance.CLAIM_COST_BASE * claim_costs[terrain[ni]]
+		if state.owners[ni] == GameState.RUINS_OWNER_ID:
+			cost *= Balance.RUINS_CLAIM_MULT
+		cost *= discount
 		if cost < min_cost:
 			min_cost = cost
 		if player.expansion_troops < cost:
 			continue
 		player.expansion_troops -= cost
-		var pos: Vector2i = state.idx_to_xy(ni)
-		claim_tile(sim, player.id, pos.x, pos.y)
+		@warning_ignore("integer_division")
+		claim_tile(sim, player.id, ni % w, ni / w)
 	if player.expansion_troops < min_cost:
 		refund_expansion(player)
 
@@ -84,23 +91,44 @@ static func claim_discount(sim: Simulation, player: Player) -> float:
 	return discount
 
 
+# Free / Ruins tiles touching the player's border, in border order (the order
+# matters: it decides which tiles a ring claims first).
 static func collect_frontier(state: GameState, player: Player) -> PackedInt32Array:
 	var seen: Dictionary = {}
 	var out := PackedInt32Array()
+	var owners: PackedByteArray = state.owners
+	var blocked: PackedByteArray = state.blocked
+	var w: int = state.width
+	var h: int = state.height
 	for i: int in player.border.keys():
-		var pos: Vector2i = state.idx_to_xy(i)
-		for off in NEIGHBOR_OFFSETS:
-			var nx: int = pos.x + off.x
-			var ny: int = pos.y + off.y
-			if not state.in_bounds(nx, ny):
-				continue
-			var ni: int = state.idx(nx, ny)
+		var x: int = i % w
+		@warning_ignore("integer_division")
+		var y: int = i / w
+		# Neighbour order: right, left, down, up (same as NEIGHBOR_OFFSETS).
+		for k in range(4):
+			var ni: int
+			if k == 0:
+				if x + 1 >= w:
+					continue
+				ni = i + 1
+			elif k == 1:
+				if x <= 0:
+					continue
+				ni = i - 1
+			elif k == 2:
+				if y + 1 >= h:
+					continue
+				ni = i + w
+			else:
+				if y <= 0:
+					continue
+				ni = i - w
 			if seen.has(ni):
 				continue
-			var ow: int = state.owners[ni]
+			var ow: int = owners[ni]
 			if ow != 0 and ow != GameState.RUINS_OWNER_ID:
 				continue
-			if state.is_blocked_terrain(state.terrain[ni]):
+			if blocked[ni] == 1:
 				continue
 			seen[ni] = true
 			out.append(ni)
@@ -145,23 +173,37 @@ static func claim_circle(sim: Simulation, player: Player, cx: int, cy: int, r: i
 
 static func claim_tile(sim: Simulation, player_id: int, x: int, y: int) -> void:
 	var state: GameState = sim.state
-	var i: int = state.idx(x, y)
+	var i: int = y * state.width + x
 	var prev: int = state.owners[i]
 	if prev == player_id:
 		return
 	# Destroy any building/wall the previous owner had here; the capturer
 	# gets 25% of its cost as loot.
 	if prev > 0 and prev != GameState.RUINS_OWNER_ID:
-		BuildingsOps.destroy_building_at(sim, i, prev, player_id)
-		BuildingsOps.destroy_wall_at(sim, i, prev, player_id)
+		if state.building_at_tile.has(i):
+			BuildingsOps.destroy_building_at(sim, i, prev, player_id)
+		if state.wall_tiles.has(i):
+			BuildingsOps.destroy_wall_at(sim, i, prev, player_id)
 	state.set_owner_idx(i, player_id)
 	update_borders_on_change(state, i, prev, player_id)
 
 
+static func _player_or_null(players: Array[Player], id: int) -> Player:
+	if id >= 1 and id <= players.size():
+		return players[id - 1]
+	return null
+
+
 static func update_borders_on_change(state: GameState, i: int, from_owner: int, to_owner: int) -> void:
-	var pos: Vector2i = state.idx_to_xy(i)
-	var from_player: Player = state.get_player(from_owner)
-	var to_player: Player = state.get_player(to_owner)
+	var players: Array[Player] = state.players
+	var owners: PackedByteArray = state.owners
+	var w: int = state.width
+	var h: int = state.height
+	var x: int = i % w
+	@warning_ignore("integer_division")
+	var y: int = i / w
+	var from_player: Player = _player_or_null(players, from_owner)
+	var to_player: Player = _player_or_null(players, to_owner)
 	var is_gem: bool = state.terrain[i] == Balance.TERRAIN_GEM
 	if from_player != null:
 		from_player.border.erase(i)
@@ -174,35 +216,60 @@ static func update_borders_on_change(state: GameState, i: int, from_owner: int, 
 			to_player.gem_tiles += 1
 		if to_player.land > to_player.peak_land:
 			to_player.peak_land = to_player.land
-		if tile_is_border(state, i, to_owner):
+		if _is_border(owners, w, h, i, x, y, to_owner):
 			to_player.border[i] = true
-	# Any neighbour owned by either player may have become/stopped being border.
-	for off in NEIGHBOR_OFFSETS:
-		var nx: int = pos.x + off.x
-		var ny: int = pos.y + off.y
-		if not state.in_bounds(nx, ny):
-			continue
-		var ni: int = state.idx(nx, ny)
-		var nowner: int = state.owners[ni]
-		var np: Player = state.get_player(nowner)
+	# Any neighbour may have become / stopped being border. Order: right,
+	# left, down, up (same as NEIGHBOR_OFFSETS; the border dict order matters).
+	for k in range(4):
+		var ni: int
+		var nx: int = x
+		var ny: int = y
+		if k == 0:
+			if x + 1 >= w:
+				continue
+			ni = i + 1
+			nx = x + 1
+		elif k == 1:
+			if x <= 0:
+				continue
+			ni = i - 1
+			nx = x - 1
+		elif k == 2:
+			if y + 1 >= h:
+				continue
+			ni = i + w
+			ny = y + 1
+		else:
+			if y <= 0:
+				continue
+			ni = i - w
+			ny = y - 1
+		var nowner: int = owners[ni]
+		var np: Player = _player_or_null(players, nowner)
 		if np == null:
 			continue
-		if tile_is_border(state, ni, nowner):
+		if _is_border(owners, w, h, ni, nx, ny, nowner):
 			np.border[ni] = true
 		else:
 			np.border.erase(ni)
 
 
-static func tile_is_border(state: GameState, i: int, owner_id: int) -> bool:
-	var pos: Vector2i = state.idx_to_xy(i)
-	for off in NEIGHBOR_OFFSETS:
-		var nx: int = pos.x + off.x
-		var ny: int = pos.y + off.y
-		if not state.in_bounds(nx, ny):
-			continue
-		if state.owners[state.idx(nx, ny)] != owner_id:
-			return true
+static func _is_border(owners: PackedByteArray, w: int, h: int, i: int, x: int, y: int, owner_id: int) -> bool:
+	if x + 1 < w and owners[i + 1] != owner_id:
+		return true
+	if x > 0 and owners[i - 1] != owner_id:
+		return true
+	if y + 1 < h and owners[i + w] != owner_id:
+		return true
+	if y > 0 and owners[i - w] != owner_id:
+		return true
 	return false
+
+
+static func tile_is_border(state: GameState, i: int, owner_id: int) -> bool:
+	var w: int = state.width
+	@warning_ignore("integer_division")
+	return _is_border(state.owners, w, state.height, i, i % w, i / w, owner_id)
 
 
 static func tile_touches_player(state: GameState, x: int, y: int, player_id: int) -> bool:

@@ -285,3 +285,19 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Get attacked by two bots at once: one may offer you a truce (Accept / Decline on the left).
 - Let one player grow past 30% of the map: star on the leaderboard and over their Crown, and your "−15%" attack badge.
 
+## Simulator speed-up (before Prompt 11)
+
+**What changed** (no game rules or bot behaviour changed)
+- Profiled the simulator tick by tick (`scenes/tools/sim_profile.tscn`). Attacks were 73% of the time, then Crown-alert checks, bots and expansion.
+- Attack rings now work out their per-ring constants once (defender's Crown/zone/Fort data, Rally/Oathbreaker/Rising Empire flags) instead of per tile, with the exact same arithmetic. Tile claiming, border bookkeeping and the expansion frontier use direct index maths in the same order as before. Crown-zone alerts are cached per attack until its front changes. Usable-tile count, player lookup and blocked-terrain checks are cached. Headless runs skip redraw bookkeeping.
+- **Proof it's the same game:** the simulator now records a fingerprint of each match's exact end state (every tile's owner, every player's land and troops, the end tick). 14 seeded matches (12 Medium, 2 Large with 12 players) gave bit-for-bit identical fingerprints before and after.
+- **Speed:** the slowest full 15-minute match went from 22.1 s to 7.5 s on the cloud machine (2.4–2.9x overall). For reference, the old Prompt 7 simulator took ~100 s per match on this same machine, close to your ~90 s, so expect roughly 7–8 s per full match on your PC.
+- New `--jobs N` option runs the matches in N Godot processes at once and merges the results (identical output). With 4 cores: 8 matches in 14 s instead of 34 s.
+
+**How to run**
+```
+godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
+```
+
+**Found while profiling (fixed in Prompt 11, since it changes behaviour):** an attack whose remaining troops can't pay for any tile never ends. It keeps one of the 3 attack slots forever.
+

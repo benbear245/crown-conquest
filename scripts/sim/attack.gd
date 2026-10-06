@@ -18,3 +18,10 @@ var front: Dictionary = {}
 
 # Seconds remaining until the next ring advance.
 var advance_timer: float = 0.0
+
+# Cached "does the front touch the defender's Crown zone?" for Crown alerts.
+# Invalidate (zone_cache_valid = false) whenever `front` changes.
+var zone_cache_valid: bool = false
+var zone_cache_key: Vector3i = Vector3i(-1, -1, -1)
+var zone_touch: bool = false
+

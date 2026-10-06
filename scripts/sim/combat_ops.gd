@@ -122,55 +122,132 @@ static func tick_attacks(sim: Simulation) -> void:
 		i += 1
 
 
+# One ring of an attack. The per-tile price is the same maths as
+# attack_tile_cost() + combined_defense_at(), with everything that is constant
+# for the ring worked out once up front (this loop is the simulator's hot path).
 static func advance_attack(sim: Simulation, a: Attack) -> void:
 	var state: GameState = sim.state
 	var defender: Player = state.get_player(a.defender_id)
 	if defender == null or not defender.is_alive or defender.land <= 0:
 		a.troops_remaining = 0.0
 		return
+	var attacker: Player = state.get_player(a.attacker_id)
+	var now: float = state.match_time
+	var w: int = state.width
+	var h: int = state.height
+	var owners: PackedByteArray = state.owners
 	var d_ratio: float = defender.troops / float(defender.land)
-	var shield_active: bool = AbilitiesOps.is_crown_shield_active(defender, state.match_time) and not state.is_final_siege()
-	var shield_r2: int = defender.crown_zone_radius() * defender.crown_zone_radius()
+	var is_siege: bool = state.is_final_siege()
+	var shield_active: bool = AbilitiesOps.is_crown_shield_active(defender, now) and not is_siege
+	var zone_r: int = defender.crown_zone_radius()
+	var zone_r2: int = zone_r * zone_r
+	var cx: int = defender.crown_x
+	var cy: int = defender.crown_y
+	var centre_idx: int = state.crown_centres.get(a.defender_id, -1)
+	# Defense context (see combined_defense_at).
+	var crown_active: bool = defender.crown_move_until <= now
+	var crown_tile_def: float = Balance.FINAL_SIEGE_CROWN_TILE_DEFENSE if is_siege else defender.crown_tile_defense()
+	var zone_on: bool = crown_active and not is_siege and cx >= 0
+	var zone_def: float = defender.crown_zone_defense()
+	var forts: Array = _fort_cache(state, defender)
+	var any_bombard: bool = not state.bombards.is_empty()
+	var terrain_defense: PackedFloat32Array = Balance.TERRAIN_DEFENSE
+	# Attacker multipliers (see attack_tile_cost).
+	var rally_on: bool = attacker != null and AbilitiesOps.is_rally_active(attacker, now)
+	var oath_on: bool = attacker != null and TrucesOps.is_oathbreaker(attacker, now)
+	var rising: int = sim.rising_empire_id()
+	var rising_on: bool = attacker != null and rising > 0 and a.defender_id == rising and a.attacker_id != rising
 	var new_front: Dictionary = {}
 	a.tiles_taken_last_ring = 0
 	for ni: int in a.front.keys():
-		var cur_owner: int = state.owners[ni]
-		if cur_owner != a.defender_id:
+		if owners[ni] != a.defender_id:
 			continue
-		if state.is_blocked_terrain(state.terrain[ni]):
+		if state.blocked[ni] == 1:
 			continue
+		var x: int = ni % w
+		@warning_ignore("integer_division")
+		var y: int = ni / w
+		var dxz: int = x - cx
+		var dyz: int = y - cy
+		var in_zone: bool = dxz * dxz + dyz * dyz <= zone_r2
 		# Crown Shield: can't take tiles inside the defender's Crown zone.
-		if shield_active and defender.crown_x >= 0:
-			var pos2: Vector2i = state.idx_to_xy(ni)
-			var dxs: int = pos2.x - defender.crown_x
-			var dys: int = pos2.y - defender.crown_y
-			if dxs * dxs + dys * dys <= shield_r2:
-				new_front[ni] = true
-				continue
-		var cost: float = attack_tile_cost(sim, ni, d_ratio, a.attacker_id)
+		if shield_active and cx >= 0 and in_zone:
+			new_front[ni] = true
+			continue
+		# --- tile cost ---
+		var extra_def: float
+		if crown_active and state.crown_tiles.has(ni) and state.crown_tiles[ni] == a.defender_id:
+			extra_def = crown_tile_def
+		else:
+			var def: float = 1.0
+			if zone_on and in_zone:
+				def *= zone_def
+			if not forts.is_empty():
+				def *= _best_fort(forts, x, y)
+			if state.wall_tiles.has(ni) and state.wall_tiles[ni] == a.defender_id:
+				def *= Balance.WALL_DEFENSE
+			extra_def = minf(def, Balance.BUILDING_DEFENSE_CAP)
+		if any_bombard and AbilitiesOps.tile_in_any_bombard(state, ni):
+			extra_def *= Balance.BOMBARD_DEFENSE_MULT
+		var cost: float = Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_defense[state.terrain[ni]] * extra_def
+		if rally_on:
+			cost *= (1.0 - Balance.RALLY_ATTACK_DISCOUNT)
+		if oath_on:
+			cost *= (1.0 + Balance.OATHBREAKER_ATTACK_PENALTY)
+		if rising_on:
+			cost *= (1.0 - Balance.RISING_EMPIRE_ATTACK_DISCOUNT)
 		if a.troops_remaining < cost:
 			new_front[ni] = true
 			continue
+		# --- capture ---
 		a.troops_remaining -= cost
 		a.tiles_taken_last_ring += 1
 		defender.troops = maxf(0.0, defender.troops - Balance.DEFENDER_LOSS_PER_TILE * d_ratio)
-		var pos: Vector2i = state.idx_to_xy(ni)
-		var was_centre: bool = state.crown_centres.get(a.defender_id, -1) == ni
-		TerritoryOps.claim_tile(sim, a.attacker_id, pos.x, pos.y)
-		sim.mark_flash(ni)
-		if was_centre:
+		var had_fort: bool = not forts.is_empty() and state.building_at_tile.has(ni)
+		TerritoryOps.claim_tile(sim, a.attacker_id, x, y)
+		if had_fort:
+			forts = _fort_cache(state, defender)   # a Fort fell: its cover is gone
+		if not sim.headless:
+			sim.mark_flash(ni)
+		if ni == centre_idx:
 			eliminate_player(sim, a.defender_id, a.attacker_id)
 			# Defender is gone; this attack was removed by end_attacks_touching.
 			return
-		for off in NEIGHBOR_OFFSETS:
-			var nx: int = pos.x + off.x
-			var ny: int = pos.y + off.y
-			if not state.in_bounds(nx, ny):
-				continue
-			var nni: int = state.idx(nx, ny)
-			if state.owners[nni] == a.defender_id:
-				new_front[nni] = true
+		# Defender tiles next to the captured one join the front (right, left, down, up).
+		if x + 1 < w and owners[ni + 1] == a.defender_id:
+			new_front[ni + 1] = true
+		if x > 0 and owners[ni - 1] == a.defender_id:
+			new_front[ni - 1] = true
+		if y + 1 < h and owners[ni + w] == a.defender_id:
+			new_front[ni + w] = true
+		if y > 0 and owners[ni - w] == a.defender_id:
+			new_front[ni - w] = true
 	a.front = new_front
+	a.zone_cache_valid = false
+
+
+# The defender's Forts as flat [x, y, r^2, mult] entries.
+static func _fort_cache(state: GameState, owner: Player) -> Array:
+	var out: Array = []
+	for ft_idx: int in owner.fort_tiles:
+		var b: Building = state.building_at_tile.get(ft_idx, null)
+		if b == null or b.owner_id != owner.id:
+			continue
+		var r: int = b.radius()
+		out.append([b.x, b.y, r * r, b.defense_mult()])
+	return out
+
+
+static func _best_fort(forts: Array, x: int, y: int) -> float:
+	var best: float = 1.0
+	for f: Array in forts:
+		var fdx: int = x - int(f[0])
+		var fdy: int = y - int(f[1])
+		if fdx * fdx + fdy * fdy <= int(f[2]):
+			var m: float = f[3]
+			if m > best:
+				best = m
+	return best
 
 
 static func attack_tile_cost(sim: Simulation, tile_idx: int, d_ratio: float, attacker_id: int = 0) -> float:
@@ -239,22 +316,32 @@ static func combined_defense_at(state: GameState, tile_idx: int) -> float:
 static func check_crown_alerts(state: GameState) -> void:
 	if state.attacks.is_empty():
 		return
+	var w: int = state.width
 	for a: Attack in state.attacks:
 		var defender: Player = state.get_player(a.defender_id)
 		if defender == null or defender.crown_x < 0:
 			continue
 		if defender.crown_alert_until >= state.match_time + CROWN_ALERT_HOLD_SEC - Balance.TICK_DELTA * 0.5:
 			continue
+		# Whether the front touches the zone only changes when the front or the
+		# Crown (position, Keep radius) changes, so it's cached on the attack.
 		var r: int = defender.crown_zone_radius()
-		var r2: int = r * r
-		for ni: int in a.front.keys():
-			var pos: Vector2i = state.idx_to_xy(ni)
-			var dx: int = pos.x - defender.crown_x
-			var dy: int = pos.y - defender.crown_y
-			if dx * dx + dy * dy <= r2:
-				defender.crown_alert_until = state.match_time + CROWN_ALERT_HOLD_SEC
-				defender.crown_alert_attacker = a.attacker_id
-				break
+		var key := Vector3i(defender.crown_x, defender.crown_y, r)
+		if not a.zone_cache_valid or a.zone_cache_key != key:
+			a.zone_cache_key = key
+			a.zone_cache_valid = true
+			a.zone_touch = false
+			var r2: int = r * r
+			for ni: int in a.front.keys():
+				var dx: int = ni % w - defender.crown_x
+				@warning_ignore("integer_division")
+				var dy: int = ni / w - defender.crown_y
+				if dx * dx + dy * dy <= r2:
+					a.zone_touch = true
+					break
+		if a.zone_touch:
+			defender.crown_alert_until = state.match_time + CROWN_ALERT_HOLD_SEC
+			defender.crown_alert_attacker = a.attacker_id
 
 
 # --- Elimination -------------------------------------------------------------
