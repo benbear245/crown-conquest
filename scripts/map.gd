@@ -60,11 +60,32 @@ func _terrain_color(t: int) -> Color:
 func _draw() -> void:
 	if not _ready_to_draw or _texture == null:
 		return
-	# Fit the map inside the viewport while keeping its aspect ratio.
+	var r := _draw_rect()
+	draw_texture_rect(_texture, r, false)
+
+
+func _draw_rect() -> Rect2:
 	var vp_size := get_viewport_rect().size
 	var tex_w := float(_state.width)
 	var tex_h := float(_state.height)
 	var s: float = minf(vp_size.x / tex_w, vp_size.y / tex_h)
 	var out_size := Vector2(tex_w * s, tex_h * s)
 	var out_pos := (vp_size - out_size) * 0.5
-	draw_texture_rect(_texture, Rect2(out_pos, out_size), false)
+	return Rect2(out_pos, out_size)
+
+
+func screen_to_tile(screen_pos: Vector2) -> Vector2i:
+	if _state == null or _texture == null:
+		return Vector2i(-1, -1)
+	var r := _draw_rect()
+	if not r.has_point(screen_pos):
+		return Vector2i(-1, -1)
+	var local := screen_pos - r.position
+	var s := r.size.x / float(_state.width)
+	if s <= 0.0:
+		return Vector2i(-1, -1)
+	var tx := int(local.x / s)
+	var ty := int(local.y / s)
+	tx = clampi(tx, 0, _state.width - 1)
+	ty = clampi(ty, 0, _state.height - 1)
+	return Vector2i(tx, ty)

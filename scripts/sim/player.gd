@@ -24,6 +24,21 @@ var border: Dictionary = {}
 # Peak land this match (for XP after a match).
 var peak_land: int = 0
 
+# Expansion bucket: troops committed to grabbing free land. Refunded when done.
+var expansion_troops: float = 0.0
+var expansion_timer: float = 0.0        # seconds until the next ring tick
+
 
 func troop_cap() -> float:
 	return Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)
+
+
+# Growth rate in troops/second at this player's current state. Positive when
+# below the cap, negative (shrink toward the cap) when over it.
+func troops_per_second_at(cap: float) -> float:
+	if troops > cap:
+		return -(troops - cap) * Balance.OVER_CAP_SHRINK_PER_SEC
+	if cap <= 0.0:
+		return 0.0
+	var interest := Balance.GROWTH_INTEREST_RATE_PER_SEC * troops * (1.0 - troops / cap)
+	return Balance.GROWTH_BASE_PER_SEC + Balance.GROWTH_PER_LAND_PER_SEC * float(land) + interest

@@ -18,3 +18,26 @@
 **What to check**
 - Press F5. The window should open landscape and show a plains-coloured 200x120 map scaled to fit, with a blue circle (49 tiles) on the left-centre of the map.
 - No parse errors or warnings in the Output panel. The game runs at the project's refresh rate; the sim ticks at 10 Hz regardless.
+
+## Prompt 2: Troops and expansion
+
+**Built**
+- Growth formula on tick: `2 + 0.06·land + 0.05·troops·(1 − troops/cap)` per second, capped at `200 + 3·land`. Over-cap troops shrink by 2% per second (`troops = cap + extra·(1 − 0.02·dt)`). Everything comes from Balance.
+- `Player.troops_per_second_at(cap)` returns the current growth or negative shrink; HUD reads it directly.
+- Per-player `border` set, maintained incrementally by `Simulation._update_borders_on_change` whenever an owner flips. No full-map scans in the hot path.
+- Expansion engine: tap free land touching your border → `floor(troops · slider)` moves from `troops` into `expansion_troops` and the timer starts. Every `EXPANSION_RING_INTERVAL_SEC` (0.3 s) one ring of free/ruins tiles adjacent to the border is claimed; each costs `2 × terrain claim cost`, Ruins cost half. When the bucket cannot afford any remaining frontier tile, whatever is left is refunded to `troops`.
+- Taps only expand into unowned/ruins land for now (attack hooks go in Prompt 5).
+- HUD built in code (`scripts/hud.gd`):
+  - Top panel: troop bar (dark track + fill rect, label), troops/sec, land %.
+  - Fill colour: red when over cap, green between 35 % and 65 % of cap (sweet spot), yellow otherwise.
+  - Bottom panel: HSlider from 10 to 100 %, "Send X%" label, and four thumb-sized quick buttons (25/50/75/100 %). Buttons are at least `Balance.MIN_BUTTON_PX` (56 px) tall.
+  - Decorative Controls use `MOUSE_FILTER_IGNORE` so taps on empty HUD area pass through to the map.
+- `Map.screen_to_tile(pos)` converts viewport coordinates to a tile for the tap handler.
+
+**What to check**
+- Troop bar fills over time; label matches "troops / cap".
+- Bar turns green between about 70 and 130 troops at start (35–65 % of the starting cap of ~347), and the troops/sec reading peaks there (interest term maximises at half cap).
+- Dragging the slider updates the label; the quick buttons snap the slider and change the label.
+- Tapping free land that touches the blue circle makes the circle grow outward one ring at a time, and the troop count drops by `2 × new_tiles` per ring. Taps far from the border do nothing.
+- Tapping inside the circle or on nothing does nothing.
+- Over-cap check: push troops way over the cap (not easy yet without more land), and watch them drift back down.
