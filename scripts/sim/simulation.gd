@@ -16,6 +16,9 @@ var state: GameState = GameState.new()
 var map_type: int = Balance.MAP_TYPE_CONTINENT
 var size_preset: int = Balance.MAP_SIZE_MEDIUM
 var local_player_id: int = 1
+# Headless mode: skip HUD-only bookkeeping (crown alerts, flash fades) so the
+# balance sim can run many matches without paying for rendering state it won't use.
+var headless: bool = false
 var _final_siege_announced: bool = false
 
 
@@ -67,8 +70,9 @@ func advance_tick() -> void:
 			_apply_growth()
 			_apply_expansions()
 			_tick_attacks()
-			_tick_flashes()
-			_check_crown_alerts()
+			if not headless:
+				_tick_flashes()
+				_check_crown_alerts()
 			_tick_bots()
 			_check_win_conditions()
 	state.tick_count += 1

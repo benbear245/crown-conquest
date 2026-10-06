@@ -128,3 +128,51 @@
 - If a bot captures your Crown, your screen pulses, a defeat overlay appears, and you can click "Watch" to keep observing. The match continues until a Dominion / Last-Crown / time-limit win condition triggers.
 - "Play again" resets with a new seed; the overlay closes.
 - The `⚠ Crown under attack` button appears when an enemy front crosses within six tiles of your Crown. Clicking it recentres the camera.
+
+## Prompt 7: Balance simulator
+
+**Built**
+- `scripts/tools/balance_sim.gd` + `scenes/balance_sim.tscn`: a headless scene that plays N bot-only matches on the real `Simulation` and prints + saves a Markdown report. It flips every player to a bot and overrides difficulty from a mix array (Mixed = 3 Easy, 3 Normal, 1 Hard, pad with Normal to fill 8 slots), keeps seeds deterministic (seed = match number), samples the land leader at `match_time = 3:00`, then collects: duration, winner (name / difficulty / personality), win reason, whether the 3:00 leader won, Crowns captured, and whether the match hit the 15:00 limit.
+- CLI overrides: `--matches N`, `--map small|medium|large`, `--type continent|archipelago|highlands|random`, `--mix mixed|easy|normal|hard`. Defaults match the design's "Medium map, 8 bots, Mixed difficulty" target set.
+- Report writer compares results against every row of the design's targets table (median length 7–11 min, no personality > 35 %, 3:00 leader win rate < 55 %, time-limit matches < 5 %, Crowns captured ≥ 5 of 7). Each row prints PASS / FAIL. Building/ability use and the "1 Hard vs 7 Easy" row are listed as N/A for now (Prompts 8–9 and 11).
+- The report also lists each match (seed, length, winner, reason, Crowns) and prints a short "suggested next changes" section driven by which targets failed — e.g. a long median points at `CROWN_TILE_DEFENSE` / `FINAL_SIEGE_START_SEC`, a too-high leader-at-3:00 win rate points at Underdog / Rising Empire (once Prompt 10 is in).
+- Output written as text to stdout AND to `reports/balance_<YYYY-MM-DD>.md` via `ProjectSettings.globalize_path`.
+- No `scripts/sim/` file was touched by the simulator; the same Simulation runs for the real game and the sim.
+
+**How to run**
+
+```
+godot --headless --path <project_dir> res://scenes/balance_sim.tscn
+# with options
+godot --headless --path <project_dir> res://scenes/balance_sim.tscn --matches 50 --map medium --type continent --mix mixed
+```
+
+(On Windows, use the console build of Godot so stdout prints inline. Save the Godot executable path somewhere stable; the project uses `C:\Users\benbe\Desktop\Godot_v4.7.2-stable_win64_console.exe` during development.)
+
+**Demo report (3 matches)**
+
+The current GDScript sim runs about 90 s of wall time per full 15-minute match on this machine, so the demo was run with `--matches 3` instead of the user-requested 20. The report is in `reports/balance_2026-10-06.md`; the same command with `--matches 20` reproduces the full target set in ~30 minutes once bots can crack Crowns.
+
+With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit — Crowns are too tough for Easy/Normal bots to crack through ×3 tile defense + ×1.5 zone defense with just basic expand-weakest attacks. Every target that depends on Crown falls FAILs on this first pass, which is useful: it tells us where to tune first.
+
+| Check | Target | 3-match actual | Verdict |
+| --- | --- | --- | --- |
+| Median match length | 7-11 min | 15:00 | FAIL |
+| Wins per personality | ≤ 35 % | 67 % (Opportunist) | FAIL |
+| Land leader at 3:00 wins | < 55 % | 100 % | FAIL |
+| Matches decided at the time limit | < 5 % | 100 % | FAIL |
+| Crowns captured / match | ≥ 5 of 7 | 1.7 | FAIL |
+| Each building and ability used | ≥ 30 % | N/A (Prompts 8-9) | N/A |
+| 1 Hard vs 7 Easy, Hard wins | ≥ 40 % | not run | N/A |
+
+**Suggested Balance changes to try next (not applied — Prompt 17 does the actual pass)**
+1. Lower `CROWN_TILE_DEFENSE` from 3.0 → 2.0 or `CROWN_ZONE_DEFENSE` from 1.5 → 1.25 so Crowns can be cracked before the 15:00 time limit.
+2. Pull `FINAL_SIEGE_START_SEC` from 600 s → 480 s so the Final-Siege plunder doubling and ×1.5 Crown bite earlier and force endings.
+3. Once Prompt 11 lands and bots are smarter, re-run the sim and expect many more matches to end under 11 minutes. If the median then slips below 7 min, nudge `CROWN_TILE_DEFENSE` back up.
+4. The Crowns-captured metric is 0 while bots can't crack Crowns; fixing (1) and (2) will drive it up naturally.
+5. Underdog / Rising Empire don't exist yet (Prompt 10). The 3:00-leader win-rate check is the main one that will swing when those land, so I'd defer any change there until Prompt 10 is implemented and re-run.
+
+**What to check**
+- From a terminal in the project directory, run the sim command above. Stdout shows each match's result as it finishes; the full Markdown report prints at the end and is also written to `reports/balance_<date>.md`.
+- The report's PASS/FAIL rows should match the design's targets. For now, median length and crowns-captured will FAIL; the suggestions above explain why.
+- The sim runs the same `scripts/sim/` code as the real game — no sim-only shortcuts, no hidden bot buffs.
