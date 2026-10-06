@@ -77,9 +77,11 @@ func _make(screen_name: String) -> MenuScreen:
 		"settings":
 			return SettingsScreen.new(self)
 		"customize":
-			return PlaceholderScreen.new(self, "Customize", "Colours, patterns, Crown icons and titles arrive with progression.")
+			return CustomizeScreen.new(self)
 		"stats":
-			return PlaceholderScreen.new(self, "Stats", "Your match stats arrive with progression.")
+			return StatsScreen.new(self)
+		"achievements":
+			return AchievementsScreen.new(self)
 	return null
 
 

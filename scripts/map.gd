@@ -9,6 +9,9 @@ var _texture: ImageTexture
 var _state: GameState
 var _ready_to_draw: bool = false
 var _painted_colorblind: bool = false
+# Your territory pattern (Customize; 0 = none) and whose land gets it.
+var pattern: int = 0
+var pattern_owner: int = 1
 
 
 func setup(state: GameState) -> void:
@@ -110,7 +113,12 @@ func _base_color_for_tile(i: int) -> Color:
 	if owner_id == GameState.RUINS_OWNER_ID:
 		return Balance.RUINS_COLOR.lerp(terrain_color, Palette.owner_tint())
 	var owner_color := Palette.player(owner_id)
-	return owner_color.lerp(terrain_color, Palette.owner_tint())
+	var c: Color = owner_color.lerp(terrain_color, Palette.owner_tint())
+	if pattern != 0 and owner_id == pattern_owner:
+		var shade: float = Progression.pattern_shade(pattern, i % _state.width, int(i / float(_state.width)))
+		if shade > 0.0:
+			c = c.darkened(shade)
+	return c
 
 
 func _building_color(b: Building, owner_id: int) -> Color:

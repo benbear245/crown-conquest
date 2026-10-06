@@ -65,6 +65,8 @@ var events: Array = []
 var winner_id: int = 0
 var winner_team: int = -1
 var win_reason: String = ""
+# Map type actually generated (Random resolved to Continent/Archipelago/Highlands).
+var resolved_map_type: int = 0
 # Teams mode: players have a team and an ally (see Player.team / ally_id).
 var teams_mode: bool = false
 # Tutorial: no placement countdown, no Final Siege and no 15:00 limit.

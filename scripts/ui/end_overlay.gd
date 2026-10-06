@@ -9,8 +9,11 @@ signal menu_pressed
 
 # Extra line under the stats (the Daily Challenge score). Set by game.gd.
 var extra_text: String = ""
+var xp_panel: XpPanel
+var victory_effect: VictoryEffect
 var _extra: Label
 var _again: Button
+var _effect_played: bool = false
 
 var _sim: Simulation
 var _title: Label
@@ -23,6 +26,8 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	color = Color(0, 0, 0, 0.55)
 	visible = false
+	victory_effect = VictoryEffect.new()
+	add_child(victory_effect)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
@@ -47,6 +52,8 @@ func _ready() -> void:
 	_extra.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_extra.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(_extra)
+	xp_panel = XpPanel.new()
+	vbox.add_child(xp_panel)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
@@ -72,6 +79,15 @@ func setup(sim: Simulation) -> void:
 func reset() -> void:
 	_dismissed_id = -1
 	extra_text = ""
+	_effect_played = false
+	xp_panel.clear()
+	victory_effect.play(0)
+
+
+# XP, level-ups, unlocks and achievements for this match (game.gd calls it
+# once, when the match is over for you).
+func show_progress(summary: Dictionary, achievements: Array[String]) -> void:
+	xp_panel.play(summary, achievements)
 
 
 # A different id per ending situation, so a new event re-shows the overlay.
@@ -105,6 +121,10 @@ func update_view() -> void:
 		subtitle = state.win_reason
 		if _sim.local_won():
 			title = "Your team wins!" if state.teams_mode else "Victory!"
+			if not _effect_played:
+				_effect_played = true
+				var fx: int = int(SaveData.cosmetic("effect"))
+				victory_effect.play(fx if SaveData.effect_unlocked(fx) else 0)
 		elif state.winner_id == 0:
 			title = "Match ended"
 		elif state.teams_mode:

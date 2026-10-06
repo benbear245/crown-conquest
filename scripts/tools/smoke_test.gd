@@ -16,6 +16,7 @@ var shots_dir: String = ""
 var _passed: int = 0
 var _failed: int = 0
 var _suites: Array[String] = []
+var _save_backup: Dictionary = {}
 
 
 func _ready() -> void:
@@ -27,6 +28,9 @@ func _ready() -> void:
 		elif args[i] == "--only" and i + 1 < args.size():
 			for s: String in args[i + 1].split(","):
 				_suites.append(s.strip_edges())
+	# Tests start from a fresh profile; the real save is put back at the end.
+	_save_backup = SaveData.data.duplicate(true)
+	SaveData.data = SaveData.defaults()
 	game = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(game)
 	await get_tree().process_frame
@@ -35,6 +39,8 @@ func _ready() -> void:
 	sim = game.get("_simulation")
 	hud = game.get("_hud")
 	await _run_all()
+	SaveData.data = _save_backup
+	SaveData.save()
 	print("[smoke] %d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -48,6 +54,7 @@ func _run_all() -> void:
 		"mobile": preload("res://scripts/tools/checks_mobile.gd"),
 		"feel": preload("res://scripts/tools/checks_feel.gd"),
 		"menus": preload("res://scripts/tools/checks_menus.gd"),
+		"progression": preload("res://scripts/tools/checks_progression.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):

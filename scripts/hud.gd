@@ -96,6 +96,16 @@ func close_panels() -> void:
 	enemy_panel.close_panel()
 
 
+# Gold banner + sound when an achievement is earned.
+func show_achievement(id: String) -> void:
+	var a: Dictionary = Progression.achievement(id)
+	if a.is_empty():
+		return
+	alerts.push("Achievement: %s — %s" % [a.name, a.desc], "achievement", 5.0, "ach_" + id)
+	Audio.play("sfx_victory", -10.0, 1.3)
+	Settings.vibrate(80)
+
+
 # Shows a short tip the first time an action happens.
 func hint(id: String) -> void:
 	if Hints.TEXT.has(id) and Settings.first_time("hint_" + id):

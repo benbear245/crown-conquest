@@ -1,7 +1,7 @@
 extends Node
 
-# Everything the game remembers between sessions (autoload "SaveData"):
-# Daily Challenge scores now, progression later. Saved to user://save.json
+# Everything the game remembers between sessions (autoload "SaveData"): XP,
+# stats, achievements, cosmetics and Daily Challenge scores. Saved to user://save.json
 # safely: written to a temp file, read back to check it, then renamed over
 # the old save, so a crash mid-write can't wipe progress.
 
@@ -18,9 +18,16 @@ func _ready() -> void:
 	load_save()
 
 
-static func defaults() -> Dictionary:
+func defaults() -> Dictionary:
 	return {
 		"version": VERSION,
+		"profile": {"xp": 0},
+		"stats": {
+			"matches": 0, "wins": 0, "crowns": 0, "fastest_win_sec": -1.0, "best_peak_pct": 0.0,
+			"by_mode": {"skirmish": [0, 0], "teams": [0, 0], "daily": [0, 0]},   # [played, wins]
+		},
+		"achievements": {},        # id -> unix time earned
+		"cosmetics": {"color": 0, "pattern": 0, "crown": 0, "title": "Squire", "effect": 1},
 		"daily": {"best_by_date": {}, "best_ever": 0, "played": 0},
 	}
 
@@ -79,6 +86,111 @@ func submit_daily(date: String, score: int) -> bool:
 	return is_best
 
 
+# --- Progression -----------------------------------------------------------------
+
+func xp() -> int:
+	return int(data.profile.xp)
+
+
+func level() -> int:
+	return int(Progression.level_info(xp()).level)
+
+
+func has_achievement(id: String) -> bool:
+	return (data.achievements as Dictionary).has(id)
+
+
+# Records an achievement. Returns true if it's new.
+func unlock_achievement(id: String) -> bool:
+	if has_achievement(id) or Progression.achievement(id).is_empty():
+		return false
+	data.achievements[id] = int(Time.get_unix_time_from_system())
+	save()
+	return true
+
+
+# Adds a finished match: XP, stats, achievements. Returns a summary for the
+# end screen: {xp, lines, old_xp, new_xp, old_level, new_level, unlocks,
+# new_achievements}.
+func record_match(result: Dictionary) -> Dictionary:
+	var gained: Dictionary = Progression.match_xp(result)
+	var old_xp: int = xp()
+	var old_level: int = level()
+	data.profile.xp = old_xp + int(gained.total)
+	var new_level: int = level()
+	var st: Dictionary = data.stats
+	var won: bool = bool(result.won)
+	st.matches = int(st.matches) + 1
+	st.wins = int(st.wins) + (1 if won else 0)
+	st.crowns = int(st.crowns) + int(result.crowns)
+	st.best_peak_pct = maxf(float(st.best_peak_pct), float(result.peak_pct))
+	if won and (float(st.fastest_win_sec) < 0.0 or float(result.duration_sec) < float(st.fastest_win_sec)):
+		st.fastest_win_sec = float(result.duration_sec)
+	var mode_key: String = ["skirmish", "teams", "daily", "skirmish"][int(result.mode)]
+	var pair: Array = st.by_mode.get(mode_key, [0, 0])
+	st.by_mode[mode_key] = [int(pair[0]) + 1, int(pair[1]) + (1 if won else 0)]
+	var fresh: Array[String] = []
+	for id: String in Progression.earned(result):
+		if not has_achievement(id):
+			data.achievements[id] = int(Time.get_unix_time_from_system())
+			fresh.append(id)
+	var unlocks: Array[String] = []
+	for lvl in range(old_level + 1, new_level + 1):
+		unlocks.append_array(Progression.unlocks_at(lvl))
+	save()
+	return {
+		"xp": int(gained.total), "lines": gained.lines, "old_xp": old_xp, "new_xp": xp(),
+		"old_level": old_level, "new_level": new_level, "unlocks": unlocks, "new_achievements": fresh,
+	}
+
+
+# --- Cosmetics -------------------------------------------------------------------
+
+func cosmetic(key: String) -> Variant:
+	return data.cosmetics.get(key)
+
+
+func set_cosmetic(key: String, value: Variant) -> void:
+	data.cosmetics[key] = value
+	save()
+
+
+func color_unlocked(i: int) -> bool:
+	return level() >= Progression.color_level(i)
+
+
+func pattern_unlocked(i: int) -> bool:
+	return level() >= Progression.pattern_level(i)
+
+
+func crown_unlocked(i: int) -> bool:
+	return level() >= Progression.crown_level(i)
+
+
+func effect_unlocked(i: int) -> bool:
+	return level() >= Progression.effect_level(i)
+
+
+# Every title you can pick: by level, then from achievements.
+func titles() -> Array[String]:
+	var out: Array[String] = []
+	for t: Array in Progression.LEVEL_TITLES:
+		if level() >= int(t[0]):
+			out.append(str(t[1]))
+	for a: Dictionary in Progression.ACHIEVEMENTS:
+		if has_achievement(a.id):
+			out.append(str(a.title))
+	return out
+
+
+# The territory colour you picked, or null for the normal one.
+func custom_color() -> Variant:
+	var i: int = int(cosmetic("color"))
+	if i <= 0 or i >= Progression.COLORS.size() or not color_unlocked(i):
+		return null
+	return Progression.COLORS[i]
+
+
 # --- Helpers -------------------------------------------------------------------
 
 static func _read_json(path: String) -> Variant:
@@ -87,8 +199,10 @@ static func _read_json(path: String) -> Variant:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return null
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	return parsed if parsed is Dictionary else null
+	var json := JSON.new()
+	if json.parse(f.get_as_text()) != OK:
+		return null   # corrupt: treated as missing (no error spam)
+	return json.data if json.data is Dictionary else null
 
 
 # Copies saved values over the defaults, keeping new default keys that an

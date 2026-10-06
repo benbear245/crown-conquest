@@ -391,3 +391,22 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 - Teams: your ally's Crown appears next to yours. Try tapping your ally's land (nothing happens except a message), press Send 20% to ally, and watch your ally send you troops when you're under attack. Win as a team.
 - Daily Challenge: play, finish (win or lose), check the score on the end screen and on the Daily screen; play again and see the best stay.
 - Press Menu mid-match: the game freezes; Resume, Restart (tap twice) and Quit (tap twice) work. Switch to another app on your phone and come back: the game is paused.
+
+## Prompt 15: Progression and cosmetics
+
+**Built**
+- **XP** after every finished match (win, loss, or your Crown falling): 100 for playing, +10 per 1% of peak land, +150 per Crown taken, +300 for a win, ×1.5 when you picked Hard bots. The tutorial gives none. **Levels**: going from level n to n+1 takes 500 + 100 × n XP (600 for level 2, 700 for level 3, …).
+- The end screen now shows "+1,330 XP" with the breakdown, a bar that fills up level by level, a "LEVEL UP!" pop (with sound and a buzz), what you unlocked, and the achievements you earned this match. When you win, your victory effect plays over the screen.
+- **Unlocks** (all cosmetic): 16 territory colours (4 free, then one per level up to 13), 6 patterns (Stripes 2, Dots 4, Checks 6, Waves 8, Scales 10, Bricks 14), 8 Crown icons (Classic free, then Tiara 3, Laurel 5, Star 7, Horned 9, Jewel 11, Circlet 13, Imperial 15), titles (Squire, Knight 3, Baron 6, Count 9, Duke 12, Monarch 15, Emperor 20, plus one per achievement) and victory effects (Fireworks free, Confetti 5, Golden rain 10). Every level from 2 to 15 unlocks something.
+- **Customize** screen: tabs for Colour, Pattern, Crown, Title and Victory effect; locked choices show the level that unlocks them; a live preview shows a patch of land in your colour and pattern with your Crown and "Title · Level". Choices are saved immediately and used in your next match: your land gets your colour and pattern, your Crown its icon. A bot whose colour would clash with yours gets a different one. The colour-blind palette always wins over a custom colour.
+- **Achievements** (12): the design's Kingslayer, Underdog, Island King, Speedrun, Dominion, plus First Victory, Hard Won (beat Hard bots), Untouchable (win without your Crown ever being attacked), Master Builder (8 buildings in a match, walls don't count), Peacemaker (3 truces in a match), Team Player (win a Teams match after sending your ally 1,000+ troops), Siege Lord (take a Crown during the Final Siege). Each unlocks a title. A gold banner pops up when you earn one (Kingslayer and Siege Lord pop the moment they happen). The Achievements screen (from Stats) shows each with the date you earned it.
+- **Stats** screen: level and XP, matches, wins, win rate, Crowns captured, fastest win, best peak land, best Daily score, achievements, and played/won per mode. The main menu shows your title, level and an XP bar.
+- Everything is saved in `user://save.json` (temp file → check → rename). A missing or corrupt save never crashes the game; the smoke tests back up your real save and put it back afterwards.
+- Fixed: a floating "+N plunder" number could stay frozen on screen after it expired or after starting a new match.
+- New smoke suite `progression` (53 checks). All 277 smoke checks + 10 flow checks pass.
+
+**What to test**
+- Finish a match: watch the XP bar fill and, the first time, the LEVEL UP pop with the list of unlocks. Win once to see the fireworks.
+- Take 3 Crowns in one match: the Kingslayer banner appears straight away.
+- Customize: pick a colour, pattern and Crown; check the preview, then start a match and find your land and Crown. Try the Title tab after earning an achievement.
+- Stats and Achievements screens after a few matches; close and reopen the game to check everything was saved.

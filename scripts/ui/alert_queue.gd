@@ -12,6 +12,7 @@ const COLORS: Dictionary = {
 	"info": Color(0.20, 0.35, 0.60, 0.92),
 	"event": Color(0.45, 0.33, 0.08, 0.94),
 	"warning": Color(0.55, 0.12, 0.10, 0.94),
+	"achievement": Color(0.62, 0.45, 0.05, 0.96),
 }
 
 var _banners: Array[Dictionary] = []   # {id, panel, label, until}
@@ -23,7 +24,8 @@ func _ready() -> void:
 	alignment = BoxContainer.ALIGNMENT_BEGIN
 
 
-# kind: "info" (hints), "event" (announcements), "warning" (your Crown).
+# kind: "info" (hints), "event" (announcements), "warning" (your Crown),
+# "achievement" (gold, an achievement was just earned).
 # action: optional button text; pressing it emits action_pressed(id).
 func push(text: String, kind: String = "event", seconds: float = 4.0, id: String = "", action: String = "") -> void:
 	var until: float = Time.get_ticks_msec() / 1000.0 + seconds

@@ -22,12 +22,13 @@ func refresh() -> void:
 	pass
 
 
-func back_and_action_row(action_text: String, action: Callable) -> HBoxContainer:
+func back_and_action_row(action_text: String, action: Callable, back_to: String = "main") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 20)
 	var back := UIStyle.big_button("Back", 240)
-	back.pressed.connect(func() -> void: root.show_screen("main"))
+	back.name = "Back"
+	back.pressed.connect(func() -> void: root.show_screen(back_to))
 	row.add_child(back)
 	if action_text != "":
 		var go := UIStyle.big_button(action_text, 320)

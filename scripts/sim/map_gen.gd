@@ -34,6 +34,7 @@ static func generate(state: GameState, map_type: int) -> void:
 	var resolved := map_type
 	if map_type == Balance.MAP_TYPE_RANDOM:
 		resolved = state.rng.randi_range(0, 2)
+	state.resolved_map_type = resolved
 	var w := state.width
 	var h := state.height
 

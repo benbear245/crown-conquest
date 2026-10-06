@@ -21,6 +21,8 @@ var move_preview_ok: bool = false
 # Bombard targeting preview: centre tile and whether it's in range.
 var bombard_preview: Vector2i = Vector2i(-1, -1)
 var bombard_preview_ok: bool = false
+# Your Crown icon (Customize).
+var local_crown_style: int = 0
 
 var _time: float = 0.0
 # Attack fronts, rebuilt once per sim tick: [colour, segments, mine, rally].
@@ -57,7 +59,10 @@ func _draw_crowns() -> void:
 		if state.teams_mode and p.team >= 0:
 			# Teams: a ring in the team's colour (the leaderboard swatch).
 			draw_arc(c, 2.4, 0.0, TAU, 32, Palette.player(p.team * Balance.TEAM_SIZE + 1).lightened(0.25), 0.4)
-		_draw_crown_icon(c, 1.15)
+		if p.id == local_player_id and local_crown_style != 0:
+			Icons.crown_style(self, c, 1.15, local_crown_style, CROWN_GOLD)
+		else:
+			_draw_crown_icon(c, 1.15)
 		# Rising Empire: a star above their Crown. Your truce partners: a white flag.
 		if p.id == state.rising_empire_id:
 			var bob: float = 0.15 * sin(_time * 3.0)

@@ -19,6 +19,8 @@ var auto_pause: bool = true
 var _simulation: Simulation
 var _config: MatchConfig
 var _result_recorded: bool = false
+var _tracker: MatchTracker
+var _match_achievements: Array[String] = []   # earned this match (shown at the end)
 var _targeting: Targeting
 var _touch: TouchInput = TouchInput.new()
 var _tick_accumulator: float = 0.0
@@ -57,12 +59,15 @@ func _ready() -> void:
 
 
 func _bind_match() -> void:
+	_apply_cosmetics()
 	_map.setup(_simulation.state)
 	_overlay.state = _simulation.state
 	_overlay.local_player_id = _simulation.local_player_id
 	_hud.setup(_simulation, _map)
 	_camera.fit_to_world(_map.world_size())
 	_feel.setup(_simulation, _camera)
+	_tracker = MatchTracker.new(_simulation)
+	_match_achievements.clear()
 	_result_recorded = false
 	_targeting.exit()
 	_hud.hint("placement")
@@ -80,6 +85,7 @@ func _process(delta: float) -> void:
 		_tick_accumulator = 0.0
 	_feel.consume(_simulation.state.events)
 	_hud.consume_events(_simulation.state.events)
+	_observe_achievements(_simulation.state.events)
 	_simulation.state.events.clear()
 	_map.render()
 	_record_result_once()
@@ -307,6 +313,13 @@ func _record_result_once() -> void:
 	if not over_for_me:
 		return
 	_result_recorded = true
+	if _config.mode == MatchConfig.Mode.TUTORIAL:
+		return
+	var summary: Dictionary = SaveData.record_match(_tracker.result())
+	for id: String in summary.new_achievements:
+		_match_achievements.append(id)
+		_hud.show_achievement(id)
+	_hud.end_overlay.show_progress(summary, _match_achievements)
 	if _config.mode == MatchConfig.Mode.DAILY:
 		var score: int = _simulation.daily_score()
 		var bonus: int = _simulation.daily_time_bonus()
@@ -314,6 +327,27 @@ func _record_result_once() -> void:
 		var text: String = "Daily score %d  (peak land %d + time bonus %d)" % [score, score - bonus, bonus]
 		text += "\nNew best today!" if new_best else "\nBest today: %d" % SaveData.daily_best(_config.daily_date)
 		_hud.end_overlay.extra_text = text
+
+
+# Achievements that can happen mid-match (Kingslayer, Siege Lord) pop up
+# right away.
+func _observe_achievements(events: Array) -> void:
+	if _tracker == null or _config.mode == MatchConfig.Mode.TUTORIAL:
+		return
+	for id: String in _tracker.observe(events):
+		if SaveData.unlock_achievement(id):
+			_match_achievements.append(id)
+			_hud.show_achievement(id)
+
+
+# Your colour, pattern and Crown icon from Customize.
+func _apply_cosmetics() -> void:
+	Palette.configure(_simulation.local_player_id, SaveData.custom_color(), _simulation.state.players.size())
+	var pattern: int = int(SaveData.cosmetic("pattern"))
+	_map.pattern = pattern if SaveData.pattern_unlocked(pattern) else 0
+	_map.pattern_owner = _simulation.local_player_id
+	var crown: int = int(SaveData.cosmetic("crown"))
+	_overlay.local_crown_style = crown if SaveData.crown_unlocked(crown) else 0
 
 
 func _team_still_alive(me: Player) -> bool:

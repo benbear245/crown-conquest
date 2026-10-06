@@ -11,6 +11,7 @@ const FONT_SIZE: int = 24
 var _state: GameState
 var _local_id: int = 1
 var _font: Font
+var _drew_last_frame: bool = false
 
 
 func _ready() -> void:
@@ -22,11 +23,16 @@ func _ready() -> void:
 func setup(state: GameState, local_player_id: int) -> void:
 	_state = state
 	_local_id = local_player_id
+	queue_redraw()   # wipe numbers left over from the previous match
 
 
 func _process(_delta: float) -> void:
-	if _state != null and not _state.popups.is_empty():
+	var any: bool = _state != null and not _state.popups.is_empty()
+	# Redraw while numbers float, plus once more after the last one expires
+	# so it doesn't stay stuck on screen.
+	if any or _drew_last_frame:
 		queue_redraw()
+	_drew_last_frame = any
 
 
 func _draw() -> void:

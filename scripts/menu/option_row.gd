@@ -11,10 +11,11 @@ var _buttons: Array[Button] = []
 
 func _init(title: String, options: Array, initial: int = 0, button_width: int = 170) -> void:
 	add_theme_constant_override("separation", 10)
-	var lbl := UIStyle.label(title, 22)
-	lbl.custom_minimum_size = Vector2(230, 0)
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	add_child(lbl)
+	if title != "":
+		var lbl := UIStyle.label(title, 22)
+		lbl.custom_minimum_size = Vector2(230, 0)
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		add_child(lbl)
 	var group := ButtonGroup.new()
 	for i in range(options.size()):
 		var b := UIStyle.choice_button(str(options[i]), button_width)
