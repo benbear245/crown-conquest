@@ -7,6 +7,11 @@ extends Node
 const TICKS_PER_SECOND: int = 10
 const TICK_DELTA: float = 1.0 / float(TICKS_PER_SECOND)
 
+# Match phases.
+const PHASE_PLACEMENT: int = 0
+const PHASE_MATCH: int = 1
+const PHASE_ENDED: int = 2
+
 # --- Map sizes ----------------------------------------------------------------
 const MAP_SIZE_SMALL: int = 0
 const MAP_SIZE_MEDIUM: int = 1
@@ -271,3 +276,22 @@ func color_for_player(player_id: int) -> Color:
 	if player_id <= 0 or player_id >= PLAYER_COLORS.size():
 		return Color.BLACK
 	return PLAYER_COLORS[player_id]
+
+
+# --- Bot names ---------------------------------------------------------------
+static var BOT_TITLES: PackedStringArray = PackedStringArray([
+	"Duke", "Duchess", "Lord", "Lady", "Baron", "Baroness",
+	"King", "Queen", "Count", "Countess", "Earl", "Princess",
+])
+static var BOT_NAMES: PackedStringArray = PackedStringArray([
+	"Ashford", "Vex", "Thorne", "Blackwood", "Ravenhill",
+	"Stormhold", "Grimm", "Darkmere", "Fenwick", "Fairfax",
+	"Crow", "Vane", "Wulf", "Ironside", "Shade", "Starling",
+	"Marrow", "Hollow", "Rook", "Hale", "Drake", "Ember",
+])
+
+
+static func generate_name(rng: RandomNumberGenerator) -> String:
+	var title: String = BOT_TITLES[rng.randi() % BOT_TITLES.size()]
+	var name: String = BOT_NAMES[rng.randi() % BOT_NAMES.size()]
+	return "%s %s" % [title, name]

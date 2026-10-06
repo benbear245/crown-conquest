@@ -2,98 +2,91 @@ class_name Simulation
 extends RefCounted
 
 # Drives the match. 10 ticks per second. Never touches nodes.
-# Pure data in, pure data out.
 
 const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+]
+const CROWN_OFFSETS: Array[Vector2i] = [
+	Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
+	Vector2i(-1,  0), Vector2i(0,  0), Vector2i(1,  0),
+	Vector2i(-1,  1), Vector2i(0,  1), Vector2i(1,  1),
 ]
 
 var state: GameState = GameState.new()
 var map_type: int = Balance.MAP_TYPE_CONTINENT
 var size_preset: int = Balance.MAP_SIZE_MEDIUM
+var local_player_id: int = 1
 
 
 # --- Match setup -------------------------------------------------------------
 
 func start_default_match(match_seed: int = 0) -> void:
-	start_match(Balance.MAP_SIZE_MEDIUM, Balance.MAP_TYPE_CONTINENT, match_seed)
+	start_match(Balance.MAP_SIZE_MEDIUM, Balance.MAP_TYPE_CONTINENT, match_seed, 7)
 
 
-func start_match(size: int, mt: int, match_seed: int) -> void:
+func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> void:
 	size_preset = size
 	map_type = mt
 	var dims := MapGen.dims_for_size(size)
 	state.configure(dims.x, dims.y, match_seed)
 	MapGen.generate(state, mt)
-	_add_local_player()
+	if num_bots < 0:
+		num_bots = MapGen.players_for_size(size) - 1
+	_setup_players(num_bots)
 
 
-func _add_local_player() -> void:
-	var p := Player.new()
-	p.id = 1
-	p.display_name = "You"
-	p.color = Balance.color_for_player(1)
-	p.troops = Balance.STARTING_TROOPS
-	state.players.append(p)
-	var start := _find_starting_tile(10)
-	_claim_circle(p, start.x, start.y, Balance.STARTING_LAND_RADIUS)
-
-
-# Spirals outward from (preferred_x, height/2) to find a non-blocked tile with
-# a mostly non-blocked neighbourhood. Used to drop the local player's start.
-func _find_starting_tile(preferred_x: int) -> Vector2i:
-	@warning_ignore("integer_division")
-	var cy: int = state.height / 2
-	var fallback := Vector2i(clampi(preferred_x, 2, state.width - 3), cy)
-	for radius in range(maxi(state.width, state.height)):
-		for dy in range(-radius, radius + 1):
-			for dx in range(-radius, radius + 1):
-				if radius > 0 and absi(dx) != radius and absi(dy) != radius:
-					continue
-				var x := preferred_x + dx
-				var y := cy + dy
-				if not state.in_bounds(x, y):
-					continue
-				if state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
-					continue
-				if _non_blocked_neighbour_count(x, y, Balance.STARTING_LAND_RADIUS) >= 25:
-					return Vector2i(x, y)
-	return fallback
-
-
-func _non_blocked_neighbour_count(cx: int, cy: int, r: int) -> int:
-	var r2 := r * r
-	var n := 0
-	for y in range(maxi(0, cy - r), mini(state.height, cy + r + 1)):
-		for x in range(maxi(0, cx - r), mini(state.width, cx + r + 1)):
-			var dx := x - cx
-			var dy := y - cy
-			if dx * dx + dy * dy > r2:
-				continue
-			if not state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
-				n += 1
-	return n
-
-
-func _claim_circle(player: Player, cx: int, cy: int, r: int) -> void:
-	var r2 := r * r
-	for y in range(maxi(0, cy - r), mini(state.height, cy + r + 1)):
-		for x in range(maxi(0, cx - r), mini(state.width, cx + r + 1)):
-			var dx := x - cx
-			var dy := y - cy
-			if dx * dx + dy * dy > r2:
-				continue
-			if state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
-				continue
-			_claim_tile(player.id, x, y)
+func _setup_players(num_bots: int) -> void:
+	var total: int = clampi(num_bots + 1, 1, Balance.PLAYER_COLORS.size() - 1)
+	for i in range(total):
+		var p := Player.new()
+		p.id = i + 1
+		p.color = Balance.color_for_player(p.id)
+		if i == 0:
+			p.display_name = "You"
+			p.is_bot = false
+		else:
+			p.display_name = Balance.generate_name(state.rng)
+			p.is_bot = true
+			p.difficulty = Balance.BOT_DIFFICULTY_EASY
+			p.personality = state.rng.randi() % 4
+			p.think_timer = state.rng.randf_range(0.5, 2.0)
+		state.players.append(p)
 
 
 # --- Tick loop ---------------------------------------------------------------
 
 func advance_tick() -> void:
-	_apply_growth()
-	_apply_expansions()
+	match state.phase:
+		Balance.PHASE_PLACEMENT:
+			_tick_placement()
+		Balance.PHASE_MATCH:
+			state.match_time += Balance.TICK_DELTA
+			_apply_growth()
+			_apply_expansions()
+			_tick_bots()
 	state.tick_count += 1
+
+
+func _tick_placement() -> void:
+	state.placement_time_left -= Balance.TICK_DELTA
+	# Bots place as soon as they get a chance (first tick that reaches them).
+	for p in state.players:
+		if p.is_bot and p.crown_x < 0:
+			var pos := _find_valid_crown_position()
+			if pos.x >= 0:
+				_place_crown(p, pos.x, pos.y)
+	if state.placement_time_left <= 0.0:
+		for p in state.players:
+			if p.crown_x < 0:
+				var pos := _find_valid_crown_position()
+				_place_crown(p, pos.x, pos.y)
+		state.phase = Balance.PHASE_MATCH
+
+
+func _tick_bots() -> void:
+	for p in state.players:
+		if p.is_alive and p.is_bot:
+			Bots.tick(self, p)
 
 
 func _apply_growth() -> void:
@@ -112,10 +105,8 @@ func _apply_growth() -> void:
 				p.troops = cap
 
 
-# Sum of additive growth modifiers. Gems live here; Underdog and Empire upkeep
-# land in Prompt 10.
 func _growth_multiplier(p: Player) -> float:
-	var gem_bonus := minf(float(p.gem_tiles) * Balance.GEM_GROWTH_BONUS_PER_TILE, Balance.GEM_GROWTH_BONUS_MAX)
+	var gem_bonus: float = minf(float(p.gem_tiles) * Balance.GEM_GROWTH_BONUS_PER_TILE, Balance.GEM_GROWTH_BONUS_MAX)
 	return 1.0 + gem_bonus
 
 
@@ -132,9 +123,21 @@ func _apply_expansions() -> void:
 
 # --- Player commands ---------------------------------------------------------
 
-# Returns true if the expansion was accepted. The tapped tile must be free
-# (or Ruins) and touch the player's border.
+func player_place_crown(player_id: int, x: int, y: int) -> bool:
+	if state.phase != Balance.PHASE_PLACEMENT:
+		return false
+	var p := state.get_player(player_id)
+	if p == null or p.crown_x >= 0:
+		return false
+	if not _is_valid_crown_tile(x, y, Balance.CROWN_MIN_DIST_FROM_OTHER):
+		return false
+	_place_crown(p, x, y)
+	return true
+
+
 func player_expand(player_id: int, tx: int, ty: int, fraction: float) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
 	var p := state.get_player(player_id)
 	if p == null or not p.is_alive:
 		return false
@@ -143,7 +146,7 @@ func player_expand(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 	var target_owner: int = state.owners[state.idx(tx, ty)]
 	if target_owner == player_id:
 		return false
-	# Prompt 2: expansion only. Attacks land in Prompt 5.
+	# Prompt 4: still expansion-only; attacks land in Prompt 5.
 	if target_owner != 0 and target_owner != GameState.RUINS_OWNER_ID:
 		return false
 	if state.is_blocked_terrain(state.terrain[state.idx(tx, ty)]):
@@ -156,10 +159,93 @@ func player_expand(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 		return false
 	p.troops -= send_amount
 	p.expansion_troops += send_amount
-	# Start the first ring soon so the player sees instant feedback.
 	if p.expansion_timer <= 0.0:
 		p.expansion_timer = Balance.EXPANSION_RING_INTERVAL_SEC
 	return true
+
+
+# --- Crown placement --------------------------------------------------------
+
+func _place_crown(player: Player, cx: int, cy: int) -> void:
+	player.crown_x = cx
+	player.crown_y = cy
+	player.troops = Balance.STARTING_TROOPS
+	# Mark 3x3 Crown tiles for drawing and the centre.
+	for off in CROWN_OFFSETS:
+		var tx: int = cx + off.x
+		var ty: int = cy + off.y
+		if not state.in_bounds(tx, ty):
+			continue
+		var ti := state.idx(tx, ty)
+		state.crown_tiles[ti] = player.id
+		state.dirty_tiles[ti] = true
+	state.crown_centres[player.id] = state.idx(cx, cy)
+	# Claim the starting radius-4 circle (which includes the 3x3).
+	_claim_circle(player, cx, cy, Balance.STARTING_LAND_RADIUS)
+
+
+func _is_valid_crown_tile(x: int, y: int, min_dist_from_other: int) -> bool:
+	if x < Balance.CROWN_MIN_DIST_FROM_EDGE or x >= state.width - Balance.CROWN_MIN_DIST_FROM_EDGE:
+		return false
+	if y < Balance.CROWN_MIN_DIST_FROM_EDGE or y >= state.height - Balance.CROWN_MIN_DIST_FROM_EDGE:
+		return false
+	var t: int = state.terrain[state.idx(x, y)]
+	if t != Balance.TERRAIN_PLAINS and t != Balance.TERRAIN_FOREST and t != Balance.TERRAIN_HILLS:
+		return false
+	# Every tile of the 3x3 block must sit on buildable terrain.
+	for off in CROWN_OFFSETS:
+		var tx: int = x + off.x
+		var ty: int = y + off.y
+		if not state.in_bounds(tx, ty):
+			return false
+		var tt: int = state.terrain[state.idx(tx, ty)]
+		if state.is_blocked_terrain(tt):
+			return false
+	# Keep Crowns apart.
+	var md2: int = min_dist_from_other * min_dist_from_other
+	for other in state.players:
+		if other.crown_x < 0:
+			continue
+		var dx: int = other.crown_x - x
+		var dy: int = other.crown_y - y
+		if dx * dx + dy * dy < md2:
+			return false
+	return true
+
+
+func _find_valid_crown_position() -> Vector2i:
+	var min_x: int = Balance.CROWN_MIN_DIST_FROM_EDGE
+	var min_y: int = Balance.CROWN_MIN_DIST_FROM_EDGE
+	var max_x: int = state.width - Balance.CROWN_MIN_DIST_FROM_EDGE
+	var max_y: int = state.height - Balance.CROWN_MIN_DIST_FROM_EDGE
+	# Try full spacing first.
+	for _attempt in range(800):
+		var x: int = state.rng.randi_range(min_x, max_x - 1)
+		var y: int = state.rng.randi_range(min_y, max_y - 1)
+		if _is_valid_crown_tile(x, y, Balance.CROWN_MIN_DIST_FROM_OTHER):
+			return Vector2i(x, y)
+	# Fallback: relax the inter-Crown distance.
+	@warning_ignore("integer_division")
+	var relaxed: int = Balance.CROWN_MIN_DIST_FROM_OTHER / 2
+	for _attempt in range(800):
+		var x: int = state.rng.randi_range(min_x, max_x - 1)
+		var y: int = state.rng.randi_range(min_y, max_y - 1)
+		if _is_valid_crown_tile(x, y, relaxed):
+			return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+
+func _claim_circle(player: Player, cx: int, cy: int, r: int) -> void:
+	var r2 := r * r
+	for y in range(maxi(0, cy - r), mini(state.height, cy + r + 1)):
+		for x in range(maxi(0, cx - r), mini(state.width, cx + r + 1)):
+			var dx := x - cx
+			var dy := y - cy
+			if dx * dx + dy * dy > r2:
+				continue
+			if state.is_blocked_terrain(state.terrain[state.idx(x, y)]):
+				continue
+			_claim_tile(player.id, x, y)
 
 
 # --- Expansion engine --------------------------------------------------------
@@ -185,14 +271,13 @@ func _expand_one_ring(player: Player) -> void:
 
 
 func _collect_frontier(player: Player) -> PackedInt32Array:
-	# Free (unowned/ruins) non-blocked tiles 4-adjacent to this player's border.
 	var seen := {}
 	var out := PackedInt32Array()
 	for i: int in player.border.keys():
 		var pos := state.idx_to_xy(i)
 		for off in NEIGHBOR_OFFSETS:
-			var nx := pos.x + off.x
-			var ny := pos.y + off.y
+			var nx: int = pos.x + off.x
+			var ny: int = pos.y + off.y
 			if not state.in_bounds(nx, ny):
 				continue
 			var ni := state.idx(nx, ny)
@@ -255,8 +340,8 @@ func _update_borders_on_change(i: int, from_owner: int, to_owner: int) -> void:
 			to_player.border[i] = true
 	# Any neighbour owned by either player may have become/stopped being border.
 	for off in NEIGHBOR_OFFSETS:
-		var nx := pos.x + off.x
-		var ny := pos.y + off.y
+		var nx: int = pos.x + off.x
+		var ny: int = pos.y + off.y
 		if not state.in_bounds(nx, ny):
 			continue
 		var ni := state.idx(nx, ny)
@@ -273,8 +358,8 @@ func _update_borders_on_change(i: int, from_owner: int, to_owner: int) -> void:
 func _tile_is_border(i: int, owner_id: int) -> bool:
 	var pos := state.idx_to_xy(i)
 	for off in NEIGHBOR_OFFSETS:
-		var nx := pos.x + off.x
-		var ny := pos.y + off.y
+		var nx: int = pos.x + off.x
+		var ny: int = pos.y + off.y
 		if not state.in_bounds(nx, ny):
 			continue
 		if state.owners[state.idx(nx, ny)] != owner_id:
@@ -284,8 +369,8 @@ func _tile_is_border(i: int, owner_id: int) -> bool:
 
 func _tile_touches_player(x: int, y: int, player_id: int) -> bool:
 	for off in NEIGHBOR_OFFSETS:
-		var nx := x + off.x
-		var ny := y + off.y
+		var nx: int = x + off.x
+		var ny: int = y + off.y
 		if not state.in_bounds(nx, ny):
 			continue
 		if state.owners[state.idx(nx, ny)] == player_id:

@@ -21,6 +21,16 @@ var tick_count: int = 0
 var seed: int = 0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
+# Match phase and clocks. Set by Simulation; read by HUD and bots.
+var phase: int = Balance.PHASE_PLACEMENT
+var placement_time_left: float = 0.0
+var match_time: float = 0.0
+
+# tile idx -> player_id for any of the 9 Crown tiles (3x3 block).
+var crown_tiles: Dictionary = {}
+# player_id -> tile idx of the Crown centre (the life tile).
+var crown_centres: Dictionary = {}
+
 
 func configure(w: int, h: int, match_seed: int) -> void:
 	width = w
@@ -33,7 +43,12 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	owners.resize(w * h)
 	players = []
 	dirty_tiles.clear()
+	crown_tiles.clear()
+	crown_centres.clear()
 	tick_count = 0
+	phase = Balance.PHASE_PLACEMENT
+	placement_time_left = Balance.PLACEMENT_PHASE_SEC
+	match_time = 0.0
 
 
 func tile_count() -> int:

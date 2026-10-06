@@ -29,6 +29,9 @@ var gem_tiles: int = 0                  # owned gem-field tiles, drives growth b
 var expansion_troops: float = 0.0
 var expansion_timer: float = 0.0        # seconds until the next ring tick
 
+# Bot think cadence (ignored for the local player).
+var think_timer: float = 0.0
+
 
 func troop_cap() -> float:
 	return Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)

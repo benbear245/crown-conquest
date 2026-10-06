@@ -60,3 +60,28 @@
 - Drag anywhere on the map to pan; wheel to zoom in and out. The camera clamps so you can't scroll past the edges.
 - Tapping free land next to your blue circle still expands into it, and the troop count drops by the correct per-tile cost (plains ×1, forest ×1.5, hills ×2). Taps on mountains or water do nothing.
 - If you claim a gem cluster, your troops/sec reading creeps up a bit (0.5 %/gem up to 15 %).
+
+## Prompt 4: Players, Crowns and basic bots
+
+**Built**
+- Multiple players: `_setup_players(num_bots)` creates the local player (id 1, blue) plus up to 11 bots. Bots get a fantasy name (`Balance.generate_name`), a personality (Expander / Raider / Turtle / Opportunist), an initial jittered think timer, and Easy difficulty (Normal and Hard arrive in Prompt 11).
+- Match phases live on `GameState`: `PHASE_PLACEMENT`, `PHASE_MATCH`, `PHASE_ENDED`. `advance_tick` dispatches on `state.phase`, so growth, expansion and bot thinking only run during the match.
+- Placement phase (10 s): bots pick a valid spot on their next tick via `_find_valid_crown_position` (random sample with ≥ `CROWN_MIN_DIST_FROM_OTHER` spacing, respecting edge distance and buildable terrain, then a relaxed fallback). The local player can tap any valid tile. When the timer hits 0 the sim auto-places anyone left and transitions to `PHASE_MATCH`.
+- Placing a Crown stamps the 3×3 block into `state.crown_tiles` and the centre into `state.crown_centres`, grants `STARTING_TROOPS`, then claims the radius-4 starting circle (skipping blocked tiles).
+- Map rendering: Crown tiles override the normal owner-tint — the centre is painted gold, the surrounding 8 tiles are the owner colour lightened by 35 %. The 3×3 stays visible for everyone, on top of claimed land.
+- `scripts/sim/bots.gd` (`Bots`): basic expand-only brain. On each tick it ticks `player.think_timer`; when the timer hits 0 it picks a random border tile that touches a free (unowned/ruins, non-blocked) neighbour and calls the same `Simulation.player_expand` the local player uses. Difficulty controls both the think interval and the send-fraction range from Balance.
+- Peace period: no attacks until `match_time >= PEACE_PERIOD_SEC`. Expansion is allowed throughout; attack hooks are still deferred to Prompt 5.
+- HUD additions:
+  - Match-phase label in the top row: `Placement 0:XX` → `Peace ends M:SS` → `M:SS` → `Final Siege M:SS`.
+  - Leaderboard panel anchored top-right. 5 rows of (colour swatch, truncated name, land %). Sorted by land each frame.
+  - Centre-screen placement prompt that hides when the match starts.
+  - Taps during placement call `player_place_crown`; taps during the match still call `player_expand`.
+
+**What to check**
+- Press F5. The 10-second countdown shows "Place Crown" at the centre and bottom. If you don't tap, you still end up with a Crown by the time the match clock starts.
+- Tap a tile well inside the land — your 3×3 Crown appears with a gold centre, and the radius-4 starting ring claims around it.
+- 7 bot Crowns appear on the map, spaced apart (at least 24 tiles between centres).
+- The top banner switches to "Peace ends 0:XX" during the first minute, then shows the plain match clock, and later "Final Siege" after 10 minutes.
+- The leaderboard on the right updates every frame; biggest player at the top. Early on, everyone has ~49 land tiles.
+- Bot land areas grow outward over time; nothing attacks yet (Prompt 5).
+- Tapping "New map" starts a fresh placement phase on a new seed.

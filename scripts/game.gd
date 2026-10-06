@@ -112,8 +112,12 @@ func _try_tap(screen_pos: Vector2) -> void:
 		return
 	if _simulation.state.players.is_empty():
 		return
-	var local_id: int = _simulation.state.players[0].id
-	_simulation.player_expand(local_id, tile.x, tile.y, _hud.send_fraction())
+	var local_id: int = _simulation.local_player_id
+	match _simulation.state.phase:
+		Balance.PHASE_PLACEMENT:
+			_simulation.player_place_crown(local_id, tile.x, tile.y)
+		Balance.PHASE_MATCH:
+			_simulation.player_expand(local_id, tile.x, tile.y, _hud.send_fraction())
 
 
 func _screen_to_tile(screen_pos: Vector2) -> Vector2i:

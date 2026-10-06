@@ -1,17 +1,19 @@
 class_name HUD
 extends CanvasLayer
 
-# Thumb-friendly HUD built in code so there is one scene file to look at.
+# Thumb-friendly HUD built in code so there is one file to look at.
 # Only reads from GameState; never mutates it.
 
 const QUICK_BUTTONS: Array[float] = [0.25, 0.50, 0.75, 1.00]
 const MARGIN: int = 16
 const BAR_HEIGHT: int = 32
-const BAR_WIDTH: int = 440
+const BAR_WIDTH: int = 420
 const COLOR_SWEET: Color = Color(0.40, 0.95, 0.50)
 const COLOR_NORMAL: Color = Color(0.95, 0.85, 0.35)
 const COLOR_OVER: Color = Color(0.95, 0.40, 0.35)
 const COLOR_TEXT: Color = Color(0.95, 0.95, 0.95)
+const LEADERBOARD_ROWS: int = 5
+const LEADERBOARD_WIDTH: int = 260
 
 signal new_map_pressed
 
@@ -23,14 +25,20 @@ var _bar_fill: ColorRect
 var _troop_label: Label
 var _per_sec_label: Label
 var _land_label: Label
+var _timer_label: Label
 var _slider: HSlider
 var _slider_label: Label
 var _new_map_button: Button
+var _placement_msg: Label
+var _leaderboard: VBoxContainer
+var _leader_rows: Array = []
 
 
 func _ready() -> void:
 	layer = 10
 	_build_top()
+	_build_leaderboard()
+	_build_placement_message()
 	_build_bottom()
 
 
@@ -56,7 +64,7 @@ func _build_top() -> void:
 	add_child(panel)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 20)
+	row.add_theme_constant_override("separation", 16)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(row)
 
@@ -77,10 +85,6 @@ func _build_top() -> void:
 	_bar_fill.anchor_right = 0.0
 	_bar_fill.anchor_top = 0.0
 	_bar_fill.anchor_bottom = 1.0
-	_bar_fill.offset_left = 0.0
-	_bar_fill.offset_right = 0.0
-	_bar_fill.offset_top = 0.0
-	_bar_fill.offset_bottom = 0.0
 	_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar_wrap.add_child(_bar_fill)
 
@@ -88,17 +92,24 @@ func _build_top() -> void:
 	_troop_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_troop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_troop_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_troop_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_troop_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	_troop_label.add_theme_constant_override("outline_size", 4)
+	_apply_label_style(_troop_label)
 	_troop_label.text = "0 / 0"
 	_troop_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar_wrap.add_child(_troop_label)
 
-	_per_sec_label = _make_stat_label("+0.0/s", 120)
+	_per_sec_label = _make_stat_label("+0.0/s", 110)
 	row.add_child(_per_sec_label)
-	_land_label = _make_stat_label("0.0% land", 130)
+	_land_label = _make_stat_label("0.0%", 90)
 	row.add_child(_land_label)
+	_timer_label = _make_stat_label("0:00", 160)
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	row.add_child(_timer_label)
+
+	# Spacer so the New map button hugs the right.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(spacer)
 
 	_new_map_button = Button.new()
 	_new_map_button.text = "New map"
@@ -107,16 +118,90 @@ func _build_top() -> void:
 	row.add_child(_new_map_button)
 
 
+func _build_leaderboard() -> void:
+	var panel := PanelContainer.new()
+	panel.anchor_left = 1.0
+	panel.anchor_right = 1.0
+	panel.anchor_top = 0.0
+	panel.anchor_bottom = 0.0
+	panel.offset_left = -(LEADERBOARD_WIDTH + MARGIN)
+	panel.offset_right = -MARGIN
+	panel.offset_top = MARGIN + BAR_HEIGHT + 24
+	panel.offset_bottom = panel.offset_top + 24 + LEADERBOARD_ROWS * 26
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(panel)
+
+	_leaderboard = VBoxContainer.new()
+	_leaderboard.add_theme_constant_override("separation", 4)
+	_leaderboard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_leaderboard)
+
+	var header := Label.new()
+	header.text = "Leaderboard"
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_apply_label_style(header)
+	_leaderboard.add_child(header)
+
+	for i in range(LEADERBOARD_ROWS):
+		var row_box := HBoxContainer.new()
+		row_box.add_theme_constant_override("separation", 8)
+		row_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_leaderboard.add_child(row_box)
+
+		var swatch := ColorRect.new()
+		swatch.custom_minimum_size = Vector2(16, 16)
+		swatch.color = Color(0.3, 0.3, 0.3)
+		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row_box.add_child(swatch)
+
+		var name_label := Label.new()
+		name_label.custom_minimum_size = Vector2(140, 20)
+		name_label.text = ""
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_apply_label_style(name_label)
+		row_box.add_child(name_label)
+
+		var land_label := Label.new()
+		land_label.custom_minimum_size = Vector2(60, 20)
+		land_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		land_label.text = ""
+		land_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_apply_label_style(land_label)
+		row_box.add_child(land_label)
+
+		_leader_rows.append({"row": row_box, "swatch": swatch, "name": name_label, "land": land_label})
+
+
+func _build_placement_message() -> void:
+	_placement_msg = Label.new()
+	_placement_msg.set_anchors_preset(Control.PRESET_CENTER)
+	_placement_msg.offset_left = -260
+	_placement_msg.offset_right = 260
+	_placement_msg.offset_top = -32
+	_placement_msg.offset_bottom = 32
+	_placement_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_placement_msg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_placement_msg.text = "Tap a plains / forest / hill tile to place your Crown"
+	_apply_label_style(_placement_msg)
+	_placement_msg.add_theme_font_size_override("font_size", 20)
+	_placement_msg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_placement_msg)
+
+
 func _make_stat_label(initial: String, min_width: int) -> Label:
 	var lbl := Label.new()
 	lbl.custom_minimum_size = Vector2(min_width, BAR_HEIGHT)
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_color_override("font_color", COLOR_TEXT)
-	lbl.add_theme_color_override("font_outline_color", Color.BLACK)
-	lbl.add_theme_constant_override("outline_size", 4)
+	_apply_label_style(lbl)
 	lbl.text = initial
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return lbl
+
+
+func _apply_label_style(lbl: Label) -> void:
+	lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	lbl.add_theme_constant_override("outline_size", 4)
 
 
 func _build_bottom() -> void:
@@ -137,9 +222,7 @@ func _build_bottom() -> void:
 	_slider_label = Label.new()
 	_slider_label.custom_minimum_size = Vector2(140, Balance.MIN_BUTTON_PX)
 	_slider_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_slider_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_slider_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	_slider_label.add_theme_constant_override("outline_size", 4)
+	_apply_label_style(_slider_label)
 	_slider_label.text = "Send 50%"
 	_slider_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(_slider_label)
@@ -167,9 +250,22 @@ func _build_bottom() -> void:
 # --- Updates (every frame) ---------------------------------------------------
 
 func update_from_state() -> void:
-	if _state == null or _state.players.is_empty():
+	if _state == null:
 		return
-	var p: Player = _state.players[0]
+	_update_local(_local_player())
+	_update_phase_display()
+	_update_leaderboard()
+
+
+func _local_player() -> Player:
+	if _state == null or _state.players.is_empty():
+		return null
+	return _state.players[0]
+
+
+func _update_local(p: Player) -> void:
+	if p == null:
+		return
 	var cap: float = p.troop_cap()
 	_troop_label.text = "%d / %d" % [int(p.troops), int(cap)]
 	var ratio: float = 0.0
@@ -189,7 +285,59 @@ func update_from_state() -> void:
 	var usable: int = _state.total_usable_tiles()
 	var denom: float = float(maxi(usable, 1))
 	var land_pct: float = 100.0 * float(p.land) / denom
-	_land_label.text = "%.1f%% land" % land_pct
+	_land_label.text = "%.1f%%" % land_pct
+
+
+func _update_phase_display() -> void:
+	match _state.phase:
+		Balance.PHASE_PLACEMENT:
+			_placement_msg.visible = true
+			var t_left: int = maxi(0, ceili(_state.placement_time_left))
+			_placement_msg.text = "Tap a plains / forest / hill tile to place your Crown  (%ds)" % t_left
+			_timer_label.text = "Placement  0:%02d" % t_left
+		Balance.PHASE_MATCH:
+			_placement_msg.visible = false
+			if _state.match_time < Balance.PEACE_PERIOD_SEC:
+				var peace_left: float = Balance.PEACE_PERIOD_SEC - _state.match_time
+				_timer_label.text = "Peace ends  %s" % format_time(peace_left)
+			elif _state.match_time >= Balance.FINAL_SIEGE_START_SEC:
+				_timer_label.text = "Final Siege  %s" % format_time(_state.match_time)
+			else:
+				_timer_label.text = format_time(_state.match_time)
+		_:
+			_placement_msg.visible = false
+			_timer_label.text = format_time(_state.match_time)
+
+
+func _update_leaderboard() -> void:
+	var alive: Array = _state.players.duplicate()
+	alive.sort_custom(func(a: Player, b: Player) -> bool: return a.land > b.land)
+	var usable: int = _state.total_usable_tiles()
+	var denom: float = float(maxi(usable, 1))
+	for i in range(_leader_rows.size()):
+		var row: Dictionary = _leader_rows[i]
+		if i < alive.size():
+			var p: Player = alive[i]
+			row.row.visible = true
+			if p.is_alive:
+				row.swatch.color = p.color
+			else:
+				row.swatch.color = Color(0.25, 0.25, 0.25)
+			var short_name: String = p.display_name
+			if short_name.length() > 16:
+				short_name = short_name.substr(0, 16)
+			row.name.text = short_name
+			row.land.text = "%.1f%%" % (100.0 * float(p.land) / denom)
+		else:
+			row.row.visible = false
+
+
+static func format_time(seconds: float) -> String:
+	var total: int = int(seconds)
+	@warning_ignore("integer_division")
+	var mm: int = total / 60
+	var ss: int = total % 60
+	return "%d:%02d" % [mm, ss]
 
 
 func _on_slider_changed(v: float) -> void:
