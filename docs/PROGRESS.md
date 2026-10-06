@@ -248,3 +248,20 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Press Rally while a bot of yours is running — their per-tile cost drops by 30 % for 10 s. The attack row's troop remainder visibly drains more slowly.
 - Press Bombard, then tap an enemy spot within 20 tiles of your border. A dark cracked overlay appears for 12 s, enemy tiles inside the area lose 2 troops/sec, and attacking into the area pays half the extra defense.
 - Hard bots eventually fire Bombard on your Crown; Normal bots will drop Swift March opening the match.
+
+### Prompt 9 follow-up (cloud session)
+
+**Built / fixed**
+- New ability bar (`scripts/ui/ability_button.gd`): each button draws its own icon (chevrons, shield, banner, burst), a cooldown ring that empties as the cooldown runs out (with seconds left), a gold ring while the effect is active, a green ring when ready, the troop cost, and a padlock with "Unlocks 1:30 / 3:00" until it unlocks. Crown Shield says "Off in Final Siege" then.
+- Bombard now previews: tap Bombard, tap a spot, and the blast circle appears with "Hits N enemy tiles … Costs X troops" plus **Fire!** / **Cancel**. Out-of-range or empty spots are shown in red and can't be fired. Tap elsewhere to move the preview.
+- Effect visuals on the map: a pulsing shield bubble over the whole Crown zone during Crown Shield (for every player), glowing attack fronts while Rally is on, and cracked ground with a dark ring under Bombard.
+- Bots: Easy use no abilities, Normal use Swift March + Crown Shield, Hard use all four (checked in a bot-only match). Crown Shield now actually fires in the simulator too.
+- Balance simulator now records which buildings and abilities were used and fills in the "Each building and ability used ≥ 30%" target, plus a "1 Hard vs 7 Easy" row (`--hard-check N`). New options: `--seed`, `--tag` (so reports don't overwrite each other), `--json`/`--merge` (run several simulator windows in parallel and combine).
+
+**What to test**
+- Watch the Rally and Bombard buttons count down to their unlock (lock icon), then light up.
+- Use Swift March: gold ring drains over 8 s, then a blue cooldown ring with seconds.
+- Use Crown Shield while a bot attacks your Crown: blue bubble, the front stops at the bubble edge.
+- Use Rally during an attack: your front glows gold.
+- Bombard: tap a spot too far away (red, Fire! disabled), then a spot on enemy land near you, then Fire!.
+

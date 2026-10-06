@@ -38,6 +38,55 @@ static func is_active(ability_id: int, p: Player, now: float) -> bool:
 	return false
 
 
+static func active_until(ability_id: int, p: Player) -> float:
+	match ability_id:
+		ID_SWIFT_MARCH:
+			return p.swift_march_until
+		ID_CROWN_SHIELD:
+			return p.crown_shield_until
+		ID_RALLY:
+			return p.rally_until
+		ID_BOMBARD:
+			return p.bombard_until
+	return 0.0
+
+
+static func duration_sec(ability_id: int) -> float:
+	match ability_id:
+		ID_SWIFT_MARCH:
+			return Balance.SWIFT_MARCH_DURATION_SEC
+		ID_CROWN_SHIELD:
+			return Balance.CROWN_SHIELD_DURATION_SEC
+		ID_RALLY:
+			return Balance.RALLY_DURATION_SEC
+		ID_BOMBARD:
+			return Balance.BOMBARD_DURATION_SEC
+	return 0.0
+
+
+static func cooldown_sec(ability_id: int, p: Player) -> float:
+	match ability_id:
+		ID_SWIFT_MARCH:
+			return Balance.SWIFT_MARCH_COOLDOWN_SEC
+		ID_CROWN_SHIELD:
+			return crown_shield_cooldown_sec(p)
+		ID_RALLY:
+			return Balance.RALLY_COOLDOWN_SEC
+		ID_BOMBARD:
+			return Balance.BOMBARD_COOLDOWN_SEC
+	return 0.0
+
+
+# Short cost text for the ability bar ("Free", "10%").
+static func cost_label(ability_id: int) -> String:
+	match ability_id:
+		ID_RALLY:
+			return "%d%% troops" % int(Balance.RALLY_COST_FRACTION * 100.0)
+		ID_BOMBARD:
+			return "%d%% troops" % int(Balance.BOMBARD_COST_FRACTION * 100.0)
+	return "Free"
+
+
 static func _count_use(p: Player, ability_id: int) -> void:
 	p.abilities_used[ability_id] = int(p.abilities_used.get(ability_id, 0)) + 1
 
@@ -133,7 +182,7 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 	if not state.in_bounds(target_x, target_y):
 		return false
 	# Target must be within BOMBARD_RANGE_TILES of any of the player's border tiles.
-	if not _in_range_of_border(sim, p, target_x, target_y, Balance.BOMBARD_RANGE_TILES):
+	if not bombard_in_range(sim, p, target_x, target_y):
 		return false
 	var c: float = floorf(p.troops * Balance.BOMBARD_COST_FRACTION)
 	if p.troops < c:
@@ -163,8 +212,8 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 	return true
 
 
-static func _in_range_of_border(sim: Simulation, p: Player, target_x: int, target_y: int, range_tiles: int) -> bool:
-	var r2: int = range_tiles * range_tiles
+static func bombard_in_range(sim: Simulation, p: Player, target_x: int, target_y: int) -> bool:
+	var r2: int = Balance.BOMBARD_RANGE_TILES * Balance.BOMBARD_RANGE_TILES
 	var state: GameState = sim.state
 	for i_v in p.border.keys():
 		var i: int = i_v
@@ -174,6 +223,20 @@ static func _in_range_of_border(sim: Simulation, p: Player, target_x: int, targe
 		if dx * dx + dy * dy <= r2:
 			return true
 	return false
+
+
+# Enemy tiles a Bombard at (x, y) would hit (for the targeting preview).
+static func bombard_enemy_tiles(state: GameState, owner_id: int, x: int, y: int) -> int:
+	var r: int = Balance.BOMBARD_AREA_RADIUS_TILES
+	var n: int = 0
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if dx * dx + dy * dy > r * r or not state.in_bounds(x + dx, y + dy):
+				continue
+			var ow: int = state.owners[state.idx(x + dx, y + dy)]
+			if ow > 0 and ow != owner_id and ow != GameState.RUINS_OWNER_ID:
+				n += 1
+	return n
 
 
 # --- Per-tick effects --------------------------------------------------------

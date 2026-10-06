@@ -2,14 +2,12 @@ extends Node2D
 
 # Root of the game scene. Owns the Simulation, drives it at fixed ticks,
 # tells the Map to render dirty tiles, and routes input into the sim, the
-# HUD panels or the camera. Targeting (walls, boats, Bombard, Crown move)
-# runs through one explicit input mode.
+# HUD panels or the camera. Targeting modes (walls, boats, Bombard, Crown
+# move) live in Targeting.
 
 const DRAG_THRESHOLD_PX: float = 8.0
 const LONG_PRESS_SEC: float = 0.4
 const MAX_TICKS_PER_FRAME: int = 5
-
-enum Mode { NORMAL, WALL, BOAT, BOMBARD, CROWN_MOVE }
 
 @onready var _map: Map = $Map
 @onready var _overlay: WorldOverlay = $Overlay
@@ -17,6 +15,7 @@ enum Mode { NORMAL, WALL, BOAT, BOMBARD, CROWN_MOVE }
 @onready var _camera: CameraRig = $Camera2D
 
 var _simulation: Simulation
+var _targeting: Targeting
 var _tick_accumulator: float = 0.0
 
 var _pointer_down: bool = false
@@ -24,11 +23,6 @@ var _pointer_dragged: bool = false
 var _pointer_press_pos: Vector2 = Vector2.ZERO
 var _pointer_down_time: float = 0.0
 var _long_press_fired: bool = false
-
-var _mode: int = Mode.NORMAL
-var _boat_port: Vector2i = Vector2i(-1, -1)
-var _wall_last_tile: Vector2i = Vector2i(-1, -1)
-var _wall_line_tiles: int = 0
 var _prev_crown_alert: bool = false
 
 
@@ -36,17 +30,17 @@ func _ready() -> void:
 	_simulation = Simulation.new()
 	_simulation.start_default_match(_random_seed())
 	_hud.setup(_simulation)
+	_targeting = Targeting.new(_simulation, _hud, _overlay)
 	_hud.new_map_pressed.connect(_start_new_match)
 	_hud.end_overlay.play_again_pressed.connect(_start_new_match)
 	_hud.jump_to_crown_pressed.connect(_jump_to_crown)
 	_hud.build_menu.build_requested.connect(_on_build_requested)
-	_hud.build_menu.wall_mode_requested.connect(func() -> void: _enter_mode(Mode.WALL))
-	_hud.build_menu.boat_requested.connect(func(x: int, y: int) -> void: _enter_boat_mode(Vector2i(x, y)))
+	_hud.build_menu.wall_mode_requested.connect(func() -> void: _targeting.enter(Targeting.Mode.WALL))
+	_hud.build_menu.boat_requested.connect(func(x: int, y: int) -> void: _targeting.enter_boat(Vector2i(x, y)))
 	_hud.keep_panel.buy_keep_requested.connect(func(lvl: int) -> void: _simulation.player_buy_keep(_simulation.local_player_id, lvl))
-	_hud.keep_panel.move_crown_requested.connect(func() -> void: _enter_mode(Mode.CROWN_MOVE))
+	_hud.keep_panel.move_crown_requested.connect(func() -> void: _targeting.enter(Targeting.Mode.CROWN_MOVE))
 	_hud.ability_bar.ability_pressed.connect(_on_ability_pressed)
 	_hud.enemy_panel.offer_truce_requested.connect(func(id: int) -> void: _simulation.player_offer_truce(_simulation.local_player_id, id))
-	_hud.mode_banner.cancel_pressed.connect(_exit_mode)
 	_bind_match()
 
 
@@ -56,7 +50,7 @@ func _bind_match() -> void:
 	_overlay.local_player_id = _simulation.local_player_id
 	_camera.fit_to_world(_map.world_size())
 	_prev_crown_alert = false
-	_exit_mode()
+	_targeting.exit()
 
 
 func _process(delta: float) -> void:
@@ -83,11 +77,7 @@ func _sync_overlay() -> void:
 	if sel.x >= 0:
 		var b: Building = _simulation.state.building_at_tile.get(_simulation.state.idx(sel.x, sel.y), null)
 		_overlay.selected_radius = b.radius() if b != null and b.radius() > 0 else Balance.FORT_RADIUS
-	_overlay.boat_port = _boat_port if _mode == Mode.BOAT else Vector2i(-1, -1)
-	if _mode != Mode.CROWN_MOVE:
-		_overlay.move_preview = Vector2i(-1, -1)
-	if _mode != Mode.NORMAL and _simulation.state.phase != Balance.PHASE_MATCH:
-		_exit_mode()
+	_targeting.sync_overlay()
 
 
 func _handle_crown_alert_vibration() -> void:
@@ -135,8 +125,7 @@ func _begin_pointer(pos: Vector2) -> void:
 	_pointer_press_pos = pos
 	_pointer_down_time = 0.0
 	_long_press_fired = false
-	_wall_last_tile = Vector2i(-1, -1)
-	_wall_line_tiles = 0
+	_targeting.begin_wall_stroke()
 
 
 func _end_pointer(pos: Vector2) -> void:
@@ -150,14 +139,15 @@ func _end_pointer(pos: Vector2) -> void:
 func _pointer_drag(pos: Vector2, relative: Vector2) -> void:
 	if not _pointer_down:
 		return
+	var wall_mode: bool = _targeting.mode == Targeting.Mode.WALL
 	if not _pointer_dragged and pos.distance_to(_pointer_press_pos) > DRAG_THRESHOLD_PX:
 		_pointer_dragged = true
-		if _mode == Mode.WALL:
-			_paint_wall_to(_screen_to_tile(_pointer_press_pos))
+		if wall_mode:
+			_targeting.paint_wall_to(_screen_to_tile(_pointer_press_pos))
 	if not _pointer_dragged:
 		return
-	if _mode == Mode.WALL:
-		_paint_wall_to(_screen_to_tile(pos))
+	if wall_mode:
+		_targeting.paint_wall_to(_screen_to_tile(pos))
 		return
 	_camera.pan_screen(relative)
 
@@ -184,7 +174,7 @@ func _screen_to_tile(screen_pos: Vector2) -> Vector2i:
 func _on_long_press(screen_pos: Vector2) -> void:
 	var tile: Vector2i = _screen_to_tile(screen_pos)
 	var st: GameState = _simulation.state
-	if tile.x < 0 or st.phase != Balance.PHASE_MATCH or _mode != Mode.NORMAL:
+	if tile.x < 0 or st.phase != Balance.PHASE_MATCH or _targeting.is_active():
 		return
 	_hud.close_panels()
 	var owner_id: int = st.owners[st.idx(tile.x, tile.y)]
@@ -199,9 +189,8 @@ func _on_tap(screen_pos: Vector2) -> void:
 	if tile.x < 0:
 		return
 	var st: GameState = _simulation.state
-	var me_id: int = _simulation.local_player_id
 	if st.phase == Balance.PHASE_PLACEMENT:
-		_simulation.player_place_crown(me_id, tile.x, tile.y)
+		_simulation.player_place_crown(_simulation.local_player_id, tile.x, tile.y)
 		return
 	if st.phase != Balance.PHASE_MATCH:
 		return
@@ -209,20 +198,10 @@ func _on_tap(screen_pos: Vector2) -> void:
 	if _hud.any_panel_open():
 		_hud.close_panels()
 		return
-	match _mode:
-		Mode.WALL:
-			_paint_wall_to(tile)
-		Mode.BOAT:
-			_tap_boat_target(tile)
-		Mode.BOMBARD:
-			if _simulation.player_activate_bombard(me_id, tile.x, tile.y):
-				_exit_mode()
-			else:
-				_hud.mode_banner.set_text("Out of range — pick a spot within %d tiles of your border" % Balance.BOMBARD_RANGE_TILES)
-		Mode.CROWN_MOVE:
-			_tap_crown_move(tile)
-		_:
-			_tap_normal(tile)
+	if _targeting.is_active():
+		_targeting.tap(tile)
+	else:
+		_tap_normal(tile)
 
 
 func _tap_normal(tile: Vector2i) -> void:
@@ -238,112 +217,13 @@ func _tap_normal(tile: Vector2i) -> void:
 			return
 		var b: Building = st.building_at_tile.get(ti, null)
 		if b != null and b.type == Balance.BUILDING_PORT:
-			_enter_boat_mode(tile)
+			_targeting.enter_boat(tile)
 		return
 	var frac: float = _hud.send_fraction()
 	if owner_id == 0 or owner_id == GameState.RUINS_OWNER_ID:
 		_simulation.player_expand(me.id, tile.x, tile.y, frac)
 	else:
 		_simulation.player_attack(me.id, tile.x, tile.y, frac)
-
-
-# --- Modes -------------------------------------------------------------------
-
-func _enter_mode(mode: int) -> void:
-	_hud.close_panels()
-	_mode = mode
-	match mode:
-		Mode.WALL:
-			_hud.mode_banner.show_mode(_wall_text(), "Done")
-		Mode.BOMBARD:
-			_hud.mode_banner.show_mode("Bombard: tap an enemy spot within %d tiles of your border" % Balance.BOMBARD_RANGE_TILES)
-		Mode.CROWN_MOVE:
-			_hud.mode_banner.show_mode("Move Crown: tap your own land at least %d tiles from any enemy" % Balance.CROWN_MOVE_MIN_DIST_FROM_ENEMY)
-		_:
-			_hud.mode_banner.hide_mode()
-
-
-func _enter_boat_mode(port: Vector2i) -> void:
-	_boat_port = port
-	_enter_mode(Mode.BOAT)
-	_hud.mode_banner.show_mode("Boat: tap a free or enemy coast across the water (sends %d%%)" % int(round(_hud.send_fraction() * 100.0)))
-
-
-func _exit_mode() -> void:
-	_mode = Mode.NORMAL
-	_boat_port = Vector2i(-1, -1)
-	_hud.mode_banner.hide_mode()
-
-
-func _wall_text() -> String:
-	var me: Player = _simulation.state.get_player(_simulation.local_player_id)
-	var walls: int = me.wall_count if me != null else 0
-	return "Wall mode: drag along your land.  This line: %d tiles · %d troops.  Walls %d/%d" % [
-		_wall_line_tiles, int(float(_wall_line_tiles) * Balance.WALL_COST_PER_TILE), walls, Balance.WALL_LIMIT]
-
-
-# Builds walls on every tile of the straight line from the last painted tile to
-# `tile`, so a fast drag doesn't leave gaps.
-func _paint_wall_to(tile: Vector2i) -> void:
-	if tile.x < 0:
-		return
-	var from: Vector2i = _wall_last_tile if _wall_last_tile.x >= 0 else tile
-	for t: Vector2i in _line_tiles(from, tile):
-		if t == _wall_last_tile:
-			continue
-		if _simulation.player_build_wall(_simulation.local_player_id, t.x, t.y):
-			_wall_line_tiles += 1
-	_wall_last_tile = tile
-	_hud.mode_banner.set_text(_wall_text())
-
-
-static func _line_tiles(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	var dx: int = absi(b.x - a.x)
-	var dy: int = -absi(b.y - a.y)
-	var sx: int = 1 if a.x < b.x else -1
-	var sy: int = 1 if a.y < b.y else -1
-	var err: int = dx + dy
-	var p: Vector2i = a
-	while true:
-		out.append(p)
-		if p == b:
-			break
-		var e2: int = 2 * err
-		if e2 >= dy:
-			err += dy
-			p.x += sx
-		if e2 <= dx:
-			err += dx
-			p.y += sy
-	return out
-
-
-func _tap_boat_target(tile: Vector2i) -> void:
-	var me: Player = _simulation.state.get_player(_simulation.local_player_id)
-	if me == null:
-		return
-	var path := PackedInt32Array()
-	var reason: String = BoatsOps.launch_block_reason(_simulation, me, _boat_port.x, _boat_port.y, tile.x, tile.y, path)
-	if reason != "":
-		_hud.mode_banner.set_text("Boat: %s — tap another coast" % reason)
-		return
-	_simulation.player_launch_boat(me.id, _boat_port.x, _boat_port.y, tile.x, tile.y, _hud.send_fraction())
-	_exit_mode()
-
-
-func _tap_crown_move(tile: Vector2i) -> void:
-	var me: Player = _simulation.state.get_player(_simulation.local_player_id)
-	if me == null:
-		return
-	var reason: String = CrownsOps.move_block_reason(_simulation, me, tile.x, tile.y)
-	_overlay.move_preview = tile
-	_overlay.move_preview_ok = reason == ""
-	if reason != "":
-		_hud.mode_banner.set_text("Move Crown: %s — tap another spot" % reason)
-		return
-	_simulation.player_move_crown(me.id, tile.x, tile.y)
-	_exit_mode()
 
 
 # --- HUD actions -------------------------------------------------------------
@@ -371,7 +251,7 @@ func _on_ability_pressed(ability_id: int) -> void:
 		AbilitiesOps.ID_RALLY:
 			_simulation.player_activate_rally(pid)
 		AbilitiesOps.ID_BOMBARD:
-			_enter_mode(Mode.BOMBARD)
+			_targeting.enter(Targeting.Mode.BOMBARD)
 
 
 func _jump_to_crown() -> void:

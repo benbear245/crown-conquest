@@ -55,7 +55,7 @@ func run(t: SmokeTest) -> void:
 	# --- Walls: one drag draws a gap-free line and shows the running cost ---
 	var wall_start: Vector2i = t.find_own_tile(crown + Vector2i(0, 5), 8,
 		func(ti: int) -> bool: return BuildingsOps.tile_is_buildable(t.sim, me.id, ti))
-	t.game.call("_enter_mode", 1)   # Mode.WALL
+	(t.game.get("_targeting") as Targeting).enter(Targeting.Mode.WALL)
 	var walls_before: int = me.wall_count
 	var a: Vector2 = t.tile_to_screen(wall_start)
 	var c: Vector2 = t.tile_to_screen(wall_start + Vector2i(6, 0))
@@ -67,7 +67,7 @@ func run(t: SmokeTest) -> void:
 	await t.release(c)
 	var added: int = me.wall_count - walls_before
 	t.check(added >= 5, "one drag across 7 tiles built %d walls (gap-free) [start %s reason '%s' alive %s mode %s]" % [added, wall_start,
-		BuildingsOps.build_block_reason(t.sim, me, BuildingsOps.TYPE_WALL, t.sim.state.idx(wall_start.x, wall_start.y)), me.is_alive, t.game.get("_mode")])
+		BuildingsOps.build_block_reason(t.sim, me, BuildingsOps.TYPE_WALL, t.sim.state.idx(wall_start.x, wall_start.y)), me.is_alive, (t.game.get("_targeting") as Targeting).mode])
 	t.check(banner_text.contains("troops") and banner_text.contains("This line"), "wall banner shows the running cost: %s" % banner_text)
 	var wall_ti: int = t.sim.state.idx(wall_start.x + 1, wall_start.y)
 	if t.sim.state.wall_tiles.has(wall_ti):
@@ -132,7 +132,7 @@ func run(t: SmokeTest) -> void:
 		await t.zoom_to(near_enemy, 1.0)
 		await t.long_press_tile(near_enemy)
 		t.check(menu.selected_tile() == near_enemy, "long-press opened the menu on the border tile [phase %d alive %s owner %d mode %s t=%.0f]" % [
-			t.sim.state.phase, me.is_alive, t.sim.state.owners[t.sim.state.idx(near_enemy.x, near_enemy.y)], t.game.get("_mode"), t.sim.state.match_time])
+			t.sim.state.phase, me.is_alive, t.sim.state.owners[t.sim.state.idx(near_enemy.x, near_enemy.y)], (t.game.get("_targeting") as Targeting).mode, t.sim.state.match_time])
 		t.check(rows[0].disabled and rows[0].text.contains("Within 3 tiles of an enemy"), "Fort greyed out near an enemy border: %s" % rows[0].text.replace("\n", " | "))
 		await t.shot("p8_build_menu_near_enemy")
 		menu.close_menu()

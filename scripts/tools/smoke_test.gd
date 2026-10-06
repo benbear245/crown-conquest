@@ -41,6 +41,7 @@ func _ready() -> void:
 func _run_all() -> void:
 	var suites: Dictionary = {
 		"buildings": preload("res://scripts/tools/checks_buildings.gd"),
+		"abilities": preload("res://scripts/tools/checks_abilities.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):
@@ -83,14 +84,14 @@ func ff(seconds: float, autopilot: bool = true) -> void:
 
 # Like ff, but tops the local player's troops up to 40% of the cap when low,
 # so it survives long fast-forwards without steamrolling everyone.
-func ff_safe(seconds: float) -> void:
+func ff_safe(seconds: float, autopilot: bool = true) -> void:
 	var left: float = seconds
 	while left > 0.0:
 		var step: float = minf(5.0, left)
 		var mine: Player = me()
 		if mine != null and mine.is_alive:
 			mine.troops = maxf(mine.troops, 0.4 * mine.troop_cap())
-		ff(step)
+		ff(step, autopilot)
 		left -= step
 
 
