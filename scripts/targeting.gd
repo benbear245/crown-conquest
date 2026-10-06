@@ -5,7 +5,7 @@ extends RefCounted
 # landing coast, aiming Bombard (preview + confirm) and moving the Crown.
 # The mode banner shows a hint, live feedback, and Done / Cancel / Fire!.
 
-enum Mode { NORMAL, WALL, BOAT, BOMBARD, CROWN_MOVE }
+enum Mode { NORMAL, WALL, BOAT, BOMBARD, CROWN_MOVE, BREAK_TRUCE }
 
 var mode: int = Mode.NORMAL
 var _sim: Simulation
@@ -15,6 +15,9 @@ var _boat_port: Vector2i = Vector2i(-1, -1)
 var _bombard_target: Vector2i = Vector2i(-1, -1)
 var _wall_last_tile: Vector2i = Vector2i(-1, -1)
 var _wall_line_tiles: int = 0
+# Attack waiting for "Attack anyway" because it would break a truce.
+var _pending_attack_tile: Vector2i = Vector2i(-1, -1)
+var _pending_attack_frac: float = 0.5
 
 
 func _init(sim: Simulation, hud: HUD, overlay: WorldOverlay) -> void:
@@ -52,8 +55,19 @@ func enter_boat(port: Vector2i) -> void:
 	_hud.mode_banner.show_mode("Boat: tap a free or enemy coast across the water (sends %d%%)" % int(round(_hud.send_fraction() * 100.0)))
 
 
+# Attacking a truce partner breaks the truce, so ask first.
+func confirm_truce_break(tile: Vector2i, fraction: float, partner: Player) -> void:
+	enter(Mode.BREAK_TRUCE)
+	_pending_attack_tile = tile
+	_pending_attack_frac = fraction
+	_hud.mode_banner.show_mode("Break your truce with %s? You become an Oathbreaker: attacks cost +%d%% for %ds, and bots refuse your truces for the rest of the match." % [
+		partner.display_name, int(Balance.OATHBREAKER_ATTACK_PENALTY * 100.0), int(Balance.OATHBREAKER_DURATION_SEC)], "Cancel", "Attack anyway")
+	_hud.mode_banner.set_confirm_enabled(true)
+
+
 func exit() -> void:
 	mode = Mode.NORMAL
+	_pending_attack_tile = Vector2i(-1, -1)
 	_boat_port = Vector2i(-1, -1)
 	_bombard_target = Vector2i(-1, -1)
 	_overlay.bombard_preview = Vector2i(-1, -1)
@@ -78,6 +92,8 @@ func tap(tile: Vector2i) -> void:
 			_preview_bombard(tile)
 		Mode.CROWN_MOVE:
 			_tap_crown_move(tile)
+		Mode.BREAK_TRUCE:
+			exit()   # tapping the map instead of confirming cancels
 
 
 # --- Walls -------------------------------------------------------------------
@@ -173,6 +189,9 @@ func _on_confirm() -> void:
 	if mode == Mode.BOMBARD and _bombard_target.x >= 0:
 		if _sim.player_activate_bombard(_sim.local_player_id, _bombard_target.x, _bombard_target.y):
 			exit()
+	elif mode == Mode.BREAK_TRUCE and _pending_attack_tile.x >= 0:
+		_sim.player_attack(_sim.local_player_id, _pending_attack_tile.x, _pending_attack_tile.y, _pending_attack_frac)
+		exit()
 
 
 # --- Crown move --------------------------------------------------------------

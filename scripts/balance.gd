@@ -213,6 +213,18 @@ const TRUCE_LIMIT: int = 2
 const TRUCE_BOT_RESPONSE_SEC: float = 2.0
 const OATHBREAKER_ATTACK_PENALTY: float = 0.20
 const OATHBREAKER_DURATION_SEC: float = 45.0
+const TRUCE_OFFER_EXPIRE_SEC: float = 10.0          # a human has this long to answer a bot's offer
+# Bot answers: base chance, plus bonuses if busy fighting someone else or if
+# the offerer is clearly bigger (land x TRUCE_ACCEPT_BIGGER_RATIO).
+const TRUCE_ACCEPT_BASE_CHANCE: float = 0.45
+const TRUCE_ACCEPT_BUSY_BONUS: float = 0.25
+const TRUCE_ACCEPT_BIGGER_BONUS: float = 0.25
+const TRUCE_ACCEPT_BIGGER_RATIO: float = 1.3
+# Bots offer a truce when two or more players are attacking them at once.
+const BOT_TRUCE_OFFER_COOLDOWN_SEC: float = 30.0
+# An Opportunist that plans to break a truce attacks this long after it starts.
+const OPPORTUNIST_BREAK_DELAY_MIN_SEC: float = 15.0
+const OPPORTUNIST_BREAK_DELAY_MAX_SEC: float = 70.0
 
 # --- Bots --------------------------------------------------------------------
 const BOT_EASY_THINK_SEC: float = 2.5

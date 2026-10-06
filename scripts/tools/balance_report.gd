@@ -26,6 +26,8 @@ static func build(results: Array, hard_results: Array, opts: Dictionary) -> Stri
 	var time_limit: int = 0
 	var crowns: int = 0
 	var wall_ms: float = 0.0
+	var truces: int = 0
+	var truces_broken: int = 0
 	var usage: Dictionary = {}
 	for r: Dictionary in results:
 		durations.append(float(r.duration_sec))
@@ -43,6 +45,8 @@ static func build(results: Array, hard_results: Array, opts: Dictionary) -> Stri
 			time_limit += 1
 		crowns += int(r.crowns_captured)
 		wall_ms += float(r.get("wall_ms", 0))
+		truces += int(r.get("truces", 0))
+		truces_broken += int(r.get("truces_broken", 0))
 		for k: Variant in r.get("used", []):
 			usage[str(k)] = int(usage.get(str(k), 0)) + 1
 	var nf: float = float(maxi(n, 1))
@@ -115,6 +119,8 @@ static func build(results: Array, hard_results: Array, opts: Dictionary) -> Stri
 	for item: Array in USAGE_INFO_ITEMS:
 		var c2: int = int(usage.get(item[0], 0))
 		L.append("| %s | %d | %.0f%% | (info) |" % [item[1], c2, 100.0 * float(c2) / nf])
+	L.append("")
+	L.append("Truces per match: %.1f made, %.1f broken." % [float(truces) / nf, float(truces_broken) / nf])
 	L.append("")
 	L.append("## Suggested next changes")
 	L.append("")

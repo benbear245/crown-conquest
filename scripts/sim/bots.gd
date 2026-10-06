@@ -16,6 +16,8 @@ static func tick(sim: Simulation, player: Player) -> void:
 	if player.think_timer > 0.0:
 		return
 	player.think_timer = _think_interval(player.difficulty, sim.state.rng)
+	if _maybe_offer_truce(sim, player):
+		return
 	# Normal/Hard bots occasionally spend troops on buildings/Keep upgrades.
 	if player.difficulty >= Balance.BOT_DIFFICULTY_NORMAL:
 		if _try_buy_keep(sim, player):
@@ -50,10 +52,12 @@ static func _try_abilities(sim: Simulation, player: Player) -> void:
 
 static func _pick_bombard_target(sim: Simulation, player: Player) -> Vector2i:
 	var state: GameState = sim.state
-	# Prefer the nearest enemy Crown within range.
+	# Prefer the nearest enemy Crown within range (never a truce partner's).
 	var r2: int = Balance.BOMBARD_RANGE_TILES * Balance.BOMBARD_RANGE_TILES
 	for other in state.players:
 		if other.id == player.id or not other.is_alive or other.crown_x < 0:
+			continue
+		if TrucesOps.has_truce(player, other.id, state.match_time):
 			continue
 		for i_v in player.border.keys():
 			var pos: Vector2i = state.idx_to_xy(i_v)
@@ -188,6 +192,40 @@ static func _think_interval(difficulty: int, rng: RandomNumberGenerator) -> floa
 			base = Balance.BOT_EASY_THINK_SEC
 	# A little jitter so bots don't all think on the same tick.
 	return base * rng.randf_range(0.85, 1.15)
+
+
+# Truces: when two or more players are attacking us at once, offer a truce to
+# the one committing the most troops (never to an Oathbreaker).
+static func _maybe_offer_truce(sim: Simulation, player: Player) -> bool:
+	var state: GameState = sim.state
+	if state.match_time < player.truce_offer_cd_until:
+		return false
+	var pressure: Dictionary = {}   # attacker_id -> troops in attacks on us
+	for a: Attack in state.attacks:
+		if a.defender_id == player.id:
+			pressure[a.attacker_id] = float(pressure.get(a.attacker_id, 0.0)) + a.troops_remaining
+	if pressure.size() < 2:
+		return false
+	var best_id: int = -1
+	var best_troops: float = -1.0
+	for attacker_id: int in pressure.keys():
+		var other: Player = state.get_player(attacker_id)
+		if other == null or other.oathbroken:
+			continue
+		if TrucesOps.offer_block_reason(state, player, other) != "":
+			continue
+		if float(pressure[attacker_id]) > best_troops:
+			best_troops = pressure[attacker_id]
+			best_id = attacker_id
+	if best_id < 0:
+		return false
+	player.truce_offer_cd_until = state.match_time + Balance.BOT_TRUCE_OFFER_COOLDOWN_SEC
+	return sim.player_offer_truce(player.id, best_id)
+
+
+static func random_send_fraction(player: Player, rng: RandomNumberGenerator) -> float:
+	var r: Vector2 = _send_range(player.difficulty)
+	return rng.randf_range(r.x, r.y)
 
 
 static func _send_range(difficulty: int) -> Vector2:

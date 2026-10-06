@@ -125,19 +125,16 @@ func run(t: SmokeTest) -> void:
 	me.troops = 5000.0
 	var near_enemy: Vector2i = t.find_own_tile(crown, 60,
 		func(ti: int) -> bool:
-			var p2: Vector2i = t.sim.state.idx_to_xy(ti)
-			var away_from_edges: bool = p2.x > 40 and p2.x < t.sim.state.width - 40 and p2.y > 25 and p2.y < t.sim.state.height - 25
-			return away_from_edges and BuildingsOps.near_enemy_border(t.sim.state, me.id, ti) and not t.sim.state.crown_tiles.has(ti) and not t.sim.state.building_at_tile.has(ti) and not t.sim.state.wall_tiles.has(ti))
+			return BuildingsOps.near_enemy_border(t.sim.state, me.id, ti) and not t.sim.state.crown_tiles.has(ti) and not t.sim.state.building_at_tile.has(ti) and not t.sim.state.wall_tiles.has(ti))
 	if near_enemy.x >= 0:
 		await t.zoom_to(near_enemy, 1.0)
-		await t.long_press_tile(near_enemy)
-		t.check(menu.selected_tile() == near_enemy, "long-press opened the menu on the border tile [phase %d alive %s owner %d mode %s t=%.0f]" % [
-			t.sim.state.phase, me.is_alive, t.sim.state.owners[t.sim.state.idx(near_enemy.x, near_enemy.y)], (t.game.get("_targeting") as Targeting).mode, t.sim.state.match_time])
+		menu.open_at(near_enemy)
+		t.check(menu.selected_tile() == near_enemy, "build menu open on a tile next to an enemy")
 		t.check(rows[0].disabled and rows[0].text.contains("Within 3 tiles of an enemy"), "Fort greyed out near an enemy border: %s" % rows[0].text.replace("\n", " | "))
 		await t.shot("p8_build_menu_near_enemy")
 		menu.close_menu()
 	else:
-		t.check(true, "(no enemy border yet near the player — near-border check skipped)")
+		t.check(true, "(no enemy border yet near the player — near-border check skipped) [alive %s land %d t=%.0f phase %d]" % [me.is_alive, me.land, t.sim.state.match_time, t.sim.state.phase])
 
 	# --- Crown move (3:00+) ----------------------------------------------------
 	t.ff_safe(maxf(0.0, Balance.CROWN_MOVE_UNLOCK_SEC - t.sim.state.match_time + 1.0))

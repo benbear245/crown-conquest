@@ -41,6 +41,7 @@ func _ready() -> void:
 	_hud.keep_panel.move_crown_requested.connect(func() -> void: _targeting.enter(Targeting.Mode.CROWN_MOVE))
 	_hud.ability_bar.ability_pressed.connect(_on_ability_pressed)
 	_hud.enemy_panel.offer_truce_requested.connect(func(id: int) -> void: _simulation.player_offer_truce(_simulation.local_player_id, id))
+	_hud.truce_panel.respond.connect(func(from_id: int, ok: bool) -> void: _simulation.player_respond_truce(_simulation.local_player_id, from_id, ok))
 	_bind_match()
 
 
@@ -222,6 +223,8 @@ func _tap_normal(tile: Vector2i) -> void:
 	var frac: float = _hud.send_fraction()
 	if owner_id == 0 or owner_id == GameState.RUINS_OWNER_ID:
 		_simulation.player_expand(me.id, tile.x, tile.y, frac)
+	elif TrucesOps.has_truce(me, owner_id, st.match_time):
+		_targeting.confirm_truce_break(tile, frac, st.get_player(owner_id))
 	else:
 		_simulation.player_attack(me.id, tile.x, tile.y, frac)
 

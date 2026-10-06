@@ -265,3 +265,23 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Use Rally during an attack: your front glows gold.
 - Bombard: tap a spot too far away (red, Fire! disabled), then a spot on enemy land near you, then Fire!.
 
+## Prompt 10: Fair play and truces
+
+**Built**
+- Fair-play rules moved into `scripts/sim/fair_play_ops.gd`: Underdog (+25% growth, free land and Ruins 25% cheaper when your land is under half the alive average), Empire upkeep (−15% growth over 20% of the map, −30% over 35%), Rising Empire (over 30%: everyone's attacks on them cost 15% less and bots target them). Growth bonuses add together (gems + Underdog = ×1.35 etc.).
+- Small badges under the troop bar for every bonus or penalty affecting you (Underdog ↑, gems, Empire upkeep ↓, Rising Empire ★, Oathbreaker). Tap one for a one-line explanation.
+- Rising Empire: a star next to their name on the leaderboard and above their Crown on the map. The leaderboard also shows a crown icon for players still alive (skull when out).
+- Long-press enemy land: name, land, troops, personality hint, tags (Rising Empire, Oathbreaker, your truce time left) and **Offer truce**. If you can't offer, the button says why ("Waiting for an answer", "You have 2 truces already", "Bots refuse truces from Oathbreakers").
+- Truces: 90 s, 2 at a time, bots answer within 2 s (more likely if they're busy fighting someone else or you're bigger). When a truce starts, any attacks between the two of you are called off. Truce partners get a white flag + countdown in a panel on the left, on the leaderboard, and above their Crown.
+- Bots now offer truces when two or more players attack them at once. Offers to you show **Accept / Decline** for 10 s.
+- Tapping a truce partner's land asks "Break your truce?" first. Attack anyway → Oathbreaker: attacks +20% for 45 s and every bot refuses your truces for the rest of the match. Bombard can't target a truce partner.
+- Fixed: the old code made the *breaker* refuse truces instead of bots refusing the breaker; Opportunists "broke" truces without attacking. Now an Opportunist plans to break 20% of its truces and does it by attacking its partner.
+- All truce chances and timings live in `balance.gd`.
+
+**What to test**
+- Early on, before you expand, you should see the green "+25%" Underdog badge. Tap it.
+- Long-press a neighbour → Offer truce → after 2 s they accept or refuse (banner). If accepted: white flag + countdown on the left, on the leaderboard and over their Crown.
+- Tap their land while in a truce → confirmation banner. Cancel keeps the peace; Attack anyway shows the red Oathbreaker badge.
+- Get attacked by two bots at once: one may offer you a truce (Accept / Decline on the left).
+- Let one player grow past 30% of the map: star on the leaderboard and over their Crown, and your "−15%" attack badge.
+

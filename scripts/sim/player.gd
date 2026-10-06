@@ -51,6 +51,8 @@ var keep_disabled: bool = false
 var buildings_built: Dictionary = {}
 var abilities_used: Dictionary = {}
 var boats_launched: int = 0
+var truces_made: int = 0
+var truces_broken: int = 0
 
 # Buildings (counts for cost scaling and limit checks).
 var fort_count: int = 0           # includes Fort II (Fort II upgrades count as one Fort)
@@ -82,7 +84,12 @@ var ability_think_timer: float = 0.0
 # other_player_id -> absolute match_time this truce expires.
 var active_truces: Dictionary = {}
 var oathbreaker_until: float = 0.0
-var refuses_all_truces: bool = false
+# Broke a truce at some point this match: every bot refuses their truces.
+var oathbroken: bool = false
+# Opportunist plan: partner_id -> match_time it will attack (break the truce).
+var truce_break_at: Dictionary = {}
+# Bots: no new truce offers before this time.
+var truce_offer_cd_until: float = 0.0
 
 
 func troop_cap() -> float:

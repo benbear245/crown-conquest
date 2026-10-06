@@ -62,6 +62,11 @@ var win_reason: String = ""
 var active_announcement_text: String = ""
 var active_announcement_until: float = 0.0
 
+# Fair play caches (refreshed once a second by FairPlayOps).
+var avg_alive_land: float = 0.0
+var rising_empire_id: int = -1
+var fair_play_next_tick: int = 0
+
 # Usable (not water / mountain) tile count. Terrain never changes after map
 # generation, so this is computed once.
 var _usable_tiles: int = -1
@@ -110,6 +115,9 @@ func configure(w: int, h: int, new_seed: int) -> void:
 	phase = Balance.PHASE_PLACEMENT
 	placement_time_left = Balance.PLACEMENT_PHASE_SEC
 	match_time = 0.0
+	avg_alive_land = 0.0
+	rising_empire_id = -1
+	fair_play_next_tick = 0
 	_usable_tiles = -1
 
 

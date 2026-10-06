@@ -194,9 +194,13 @@ func _collect_match_stats(sim: Simulation, leader_at_3min_id: int, match_number:
 	var state: GameState = sim.state
 	var winner: Player = state.get_player(state.winner_id)
 	var total_crowns: int = 0
+	var truces: int = 0
+	var truces_broken: int = 0
 	var used: Dictionary = {}
 	for p: Player in state.players:
 		total_crowns += p.crowns_captured
+		truces += p.truces_made
+		truces_broken += p.truces_broken
 		for k: int in p.buildings_built.keys():
 			used["b%d" % k] = true
 		for k: int in p.abilities_used.keys():
@@ -217,6 +221,8 @@ func _collect_match_stats(sim: Simulation, leader_at_3min_id: int, match_number:
 		"leader_at_3min_id": leader_at_3min_id,
 		"leader_at_3min_won": leader_at_3min_id > 0 and leader_at_3min_id == state.winner_id,
 		"crowns_captured": total_crowns,
+		"truces": truces >> 1,   # each truce is counted by both partners
+		"truces_broken": truces_broken,
 		"ended_at_time_limit": state.phase == Balance.PHASE_ENDED and state.match_time >= Balance.MATCH_TIME_LIMIT_SEC - 1.0,
 		"used": used.keys(),
 	}

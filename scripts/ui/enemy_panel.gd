@@ -44,30 +44,42 @@ func close_panel() -> void:
 func open_for(target_id: int) -> void:
 	if _sim == null:
 		return
-	var state: GameState = _sim.state
-	var target: Player = state.get_player(target_id)
+	var target: Player = _sim.state.get_player(target_id)
 	if target == null or not target.is_alive or target.id == _sim.local_player_id:
 		return
 	_target_id = target_id
-	_name.text = target.display_name
-	_stats.text = "%s\nLand %.1f%%   Troops %d   %s" % [
-		personality_hint(target.personality), 100.0 * state.land_fraction(target), int(target.troops),
-		("Oathbreaker" if TrucesOps.is_oathbreaker(target, state.match_time) else ""),
-	]
-	var me: Player = state.get_player(_sim.local_player_id)
-	if me == null or not me.is_alive:
-		_offer.text = "Offer truce"
-		_offer.disabled = true
-	elif TrucesOps.has_truce(me, target_id, state.match_time):
-		_offer.text = "Already in a truce"
-		_offer.disabled = true
-	elif TrucesOps.active_truce_count(me, state.match_time) >= Balance.TRUCE_LIMIT:
-		_offer.text = "At truce limit (%d)" % Balance.TRUCE_LIMIT
-		_offer.disabled = true
-	else:
-		_offer.text = "Offer truce"
-		_offer.disabled = false
 	visible = true
+	_refresh()
+
+
+func _process(_delta: float) -> void:
+	if visible:
+		_refresh()
+
+
+func _refresh() -> void:
+	var state: GameState = _sim.state
+	var target: Player = state.get_player(_target_id)
+	if target == null or not target.is_alive or state.phase != Balance.PHASE_MATCH:
+		close_panel()
+		return
+	var me: Player = state.get_player(_sim.local_player_id)
+	var tags: Array[String] = []
+	if _sim.rising_empire_id() == target.id:
+		tags.append("Rising Empire: your attacks cost %d%% less" % int(Balance.RISING_EMPIRE_ATTACK_DISCOUNT * 100.0))
+	if TrucesOps.is_oathbreaker(target, state.match_time) or target.oathbroken:
+		tags.append("Oathbreaker")
+	if me != null and TrucesOps.has_truce(me, target.id, state.match_time):
+		tags.append("Truce with you: %s left" % GameState.format_time(TrucesOps.truce_time_left(me, target.id, state.match_time)))
+	_name.text = target.display_name
+	_stats.text = "%s\nLand %.1f%%   Troops %d   Truces %d/%d%s" % [
+		personality_hint(target.personality), 100.0 * state.land_fraction(target), int(target.troops),
+		TrucesOps.active_truce_count(target, state.match_time), Balance.TRUCE_LIMIT,
+		("\n" + "  ·  ".join(tags)) if not tags.is_empty() else "",
+	]
+	var reason: String = "You're out" if me == null or not me.is_alive else TrucesOps.offer_block_reason(state, me, target)
+	_offer.disabled = reason != ""
+	_offer.text = "Offer truce (%ds, no attacks either way)" % int(Balance.TRUCE_DURATION_SEC) if reason == "" else reason
 
 
 func _on_offer_pressed() -> void:

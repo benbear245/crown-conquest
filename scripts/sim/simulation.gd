@@ -17,13 +17,6 @@ var local_player_id: int = 1
 # numbers) so the balance sim doesn't pay for state nobody will draw.
 var headless: bool = false
 var _final_siege_announced: bool = false
-# Cached average land of alive players for Underdog. Refreshed once a second
-# (10 ticks) rather than every tick, since it changes slowly.
-var _avg_land_cache: float = 0.0
-var _avg_recompute_at: int = 0
-# Who the Rising Empire is (-1 if nobody owns > 30% of the map). Refreshed with
-# the avg cache. Used by CombatOps.attack_tile_cost to discount attacks on them.
-var _rising_empire_id: int = -1
 
 
 # --- Match setup -------------------------------------------------------------
@@ -36,9 +29,6 @@ func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> voi
 	size_preset = size
 	map_type = mt
 	_final_siege_announced = false
-	_avg_land_cache = 0.0
-	_avg_recompute_at = 0
-	_rising_empire_id = -1
 	var dims := MapGen.dims_for_size(size)
 	state.configure(dims.x, dims.y, match_seed)
 	MapGen.generate(state, mt)
@@ -81,8 +71,8 @@ func advance_tick() -> void:
 		Balance.PHASE_MATCH:
 			state.match_time += Balance.TICK_DELTA
 			_announce_final_siege_once()
-			_recompute_avg_land_once_per_second()
-			_apply_growth()
+			FairPlayOps.recompute_once_per_second(state)
+			FairPlayOps.apply_growth(state)
 			TerritoryOps.apply_expansions(self)
 			AbilitiesOps.tick(self)
 			TrucesOps.tick(self)
@@ -131,75 +121,22 @@ func _tick_bots() -> void:
 			Bots.tick(self, p)
 
 
-# --- Growth and fair play ----------------------------------------------------
+# --- Fair play queries (rules live in FairPlayOps) ---------------------------
 
-func _apply_growth() -> void:
-	for p: Player in state.players:
-		if not p.is_alive:
-			continue
-		var cap: float = p.troop_cap()
-		if p.troops > cap:
-			var extra: float = p.troops - cap
-			p.troops = cap + extra * (1.0 - Balance.OVER_CAP_SHRINK_PER_SEC * Balance.TICK_DELTA)
-		else:
-			var base_tps: float = p.troops_per_second_at(cap)
-			var mult: float = growth_multiplier(p)
-			p.troops += base_tps * mult * Balance.TICK_DELTA
-			if p.troops > cap:
-				p.troops = cap
-
-
-# Gems, Underdog and Empire upkeep add together (e.g. +10% gems and +25%
-# Underdog make growth x1.35).
 func growth_multiplier(p: Player) -> float:
-	var mult: float = 1.0
-	mult += minf(float(p.gem_tiles) * Balance.GEM_GROWTH_BONUS_PER_TILE, Balance.GEM_GROWTH_BONUS_MAX)
-	if is_underdog(p):
-		mult += Balance.UNDERDOG_GROWTH_BONUS
-	mult += empire_upkeep(p)
-	return maxf(mult, 0.1)
+	return FairPlayOps.growth_multiplier(state, p)
 
 
-# Empire upkeep growth penalty for owning too much (0 if none applies).
 func empire_upkeep(p: Player) -> float:
-	var frac: float = state.land_fraction(p)
-	if frac >= Balance.EMPIRE_UPKEEP_LAND_THRESHOLD_2:
-		return Balance.EMPIRE_UPKEEP_PENALTY_2
-	if frac >= Balance.EMPIRE_UPKEEP_LAND_THRESHOLD_1:
-		return Balance.EMPIRE_UPKEEP_PENALTY_1
-	return 0.0
-
-
-func _recompute_avg_land_once_per_second() -> void:
-	if state.tick_count < _avg_recompute_at:
-		return
-	_avg_recompute_at = state.tick_count + Balance.TICKS_PER_SECOND
-	var alive_land: int = 0
-	var alive_count: int = 0
-	_rising_empire_id = -1
-	var biggest_land: int = -1
-	for p: Player in state.players:
-		if not p.is_alive:
-			continue
-		alive_land += p.land
-		alive_count += 1
-		if p.land > biggest_land:
-			biggest_land = p.land
-			if state.land_fraction(p) > Balance.RISING_EMPIRE_LAND_THRESHOLD:
-				_rising_empire_id = p.id
-			else:
-				_rising_empire_id = -1
-	_avg_land_cache = float(alive_land) / float(maxi(alive_count, 1))
+	return FairPlayOps.empire_upkeep(state, p)
 
 
 func rising_empire_id() -> int:
-	return _rising_empire_id
+	return state.rising_empire_id
 
 
 func is_underdog(p: Player) -> bool:
-	if _avg_land_cache <= 0.0:
-		return false
-	return float(p.land) < Balance.UNDERDOG_LAND_FRACTION_OF_AVG * _avg_land_cache
+	return FairPlayOps.is_underdog(state, p)
 
 
 # --- Win conditions ----------------------------------------------------------
@@ -411,3 +348,9 @@ func player_offer_truce(player_id: int, target_id: int) -> bool:
 	if _live_player(player_id) == null:
 		return false
 	return TrucesOps.offer(self, player_id, target_id)
+
+
+func player_respond_truce(player_id: int, from_id: int, accepted: bool) -> bool:
+	if _live_player(player_id) == null:
+		return false
+	return TrucesOps.respond(self, from_id, player_id, accepted)

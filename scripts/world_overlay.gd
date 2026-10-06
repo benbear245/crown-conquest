@@ -51,6 +51,13 @@ func _draw_crowns() -> void:
 			var pulse: float = 0.5 + 0.5 * sin(_time * 8.0)
 			draw_arc(c, 2.2, 0.0, TAU, 32, Color(1, 0.3, 0.2, 0.5 + 0.4 * pulse), 0.35)
 		_draw_crown_icon(c, 1.15)
+		# Rising Empire: a star above their Crown. Your truce partners: a white flag.
+		if p.id == state.rising_empire_id:
+			var bob: float = 0.15 * sin(_time * 3.0)
+			Icons.star(self, c + Vector2(0, -2.6 + bob), 1.1, Color(1.0, 0.55, 0.25))
+		var me: Player = state.get_player(local_player_id)
+		if me != null and p.id != me.id and TrucesOps.has_truce(me, p.id, state.match_time):
+			Icons.white_flag(self, c + Vector2(1.9, -2.2), 1.0)
 
 
 func _draw_crown_icon(c: Vector2, s: float) -> void:

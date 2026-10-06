@@ -11,8 +11,6 @@ const BAR_WIDTH: int = 420
 const COLOR_SWEET: Color = Color(0.40, 0.95, 0.50)
 const COLOR_NORMAL: Color = Color(0.95, 0.85, 0.35)
 const COLOR_OVER: Color = Color(0.95, 0.40, 0.35)
-const LEADERBOARD_ROWS: int = 5
-const LEADERBOARD_WIDTH: int = 280
 
 signal new_map_pressed
 signal jump_to_crown_pressed
@@ -29,11 +27,9 @@ var _timer_label: Label
 var _slider: HSlider
 var _slider_label: Label
 var _placement_msg: Label
-var _leader_rows: Array[Dictionary] = []
 var _attack_rows: Array[Button] = []
 var _alert_button: Button
 var _announcement_label: Label
-var _modifier_label: Label
 
 # Component panels (scripts/ui/). game.gd connects their signals.
 var build_menu: BuildMenu
@@ -41,6 +37,9 @@ var keep_panel: KeepPanel
 var ability_bar: AbilityBar
 var enemy_panel: EnemyPanel
 var mode_banner: ModeBanner
+var modifier_badges: ModifierBadges
+var truce_panel: TrucePanel
+var leaderboard: Leaderboard
 var popup_layer: PopupLayer
 var end_overlay: EndOverlay
 
@@ -50,8 +49,6 @@ func _ready() -> void:
 	popup_layer = PopupLayer.new()
 	add_child(popup_layer)
 	_build_top()
-	_build_modifier_label()
-	_build_leaderboard()
 	_build_attacks()
 	_build_placement_message()
 	_build_alerts()
@@ -62,7 +59,7 @@ func _ready() -> void:
 func setup(sim: Simulation) -> void:
 	_sim = sim
 	_state = sim.state
-	for c: Variant in [build_menu, keep_panel, ability_bar, enemy_panel, end_overlay]:
+	for c: Variant in [build_menu, keep_panel, ability_bar, enemy_panel, end_overlay, modifier_badges, truce_panel, leaderboard]:
 		c.setup(sim)
 	popup_layer.setup(sim.state, sim.local_player_id)
 	update_from_state()
@@ -138,46 +135,6 @@ func _stat_label(initial: String, min_width: int) -> Label:
 	lbl.custom_minimum_size = Vector2(min_width, BAR_HEIGHT)
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	return lbl
-
-
-func _build_modifier_label() -> void:
-	_modifier_label = UIStyle.label("", UIStyle.FONT_SMALL)
-	_modifier_label.position = Vector2(MARGIN + 12, MARGIN + BAR_HEIGHT + 30)
-	_modifier_label.size = Vector2(900, 24)
-	add_child(_modifier_label)
-
-
-func _build_leaderboard() -> void:
-	var panel := UIStyle.panel()
-	panel.anchor_left = 1.0
-	panel.anchor_right = 1.0
-	panel.offset_left = -(LEADERBOARD_WIDTH + MARGIN)
-	panel.offset_right = -MARGIN
-	panel.offset_top = MARGIN + BAR_HEIGHT + 34
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(panel)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(vbox)
-	vbox.add_child(UIStyle.label("Leaderboard", UIStyle.FONT_NORMAL))
-	for i in range(LEADERBOARD_ROWS):
-		var row_box := HBoxContainer.new()
-		row_box.add_theme_constant_override("separation", 8)
-		row_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vbox.add_child(row_box)
-		var swatch := ColorRect.new()
-		swatch.custom_minimum_size = Vector2(16, 16)
-		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row_box.add_child(swatch)
-		var name_label := UIStyle.label("", UIStyle.FONT_SMALL + 1)
-		name_label.custom_minimum_size = Vector2(170, 20)
-		row_box.add_child(name_label)
-		var land_label := UIStyle.label("", UIStyle.FONT_SMALL + 1)
-		land_label.custom_minimum_size = Vector2(56, 20)
-		land_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row_box.add_child(land_label)
-		_leader_rows.append({"row": row_box, "swatch": swatch, "name": name_label, "land": land_label})
 
 
 func _build_attacks() -> void:
@@ -275,6 +232,23 @@ func _build_bottom() -> void:
 
 
 func _build_panels() -> void:
+	# Left column under the top bar: modifier badges, then truces.
+	var left_column := VBoxContainer.new()
+	left_column.position = Vector2(MARGIN, MARGIN + BAR_HEIGHT + 34)
+	left_column.add_theme_constant_override("separation", 8)
+	left_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(left_column)
+	modifier_badges = ModifierBadges.new()
+	left_column.add_child(modifier_badges)
+	truce_panel = TrucePanel.new()
+	left_column.add_child(truce_panel)
+	leaderboard = Leaderboard.new()
+	leaderboard.anchor_left = 1.0
+	leaderboard.anchor_right = 1.0
+	leaderboard.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	leaderboard.offset_right = -MARGIN
+	leaderboard.offset_top = MARGIN + BAR_HEIGHT + 34
+	add_child(leaderboard)
 	ability_bar = AbilityBar.new()
 	ability_bar.anchor_left = 0.5
 	ability_bar.anchor_right = 0.5
@@ -316,10 +290,11 @@ func update_from_state() -> void:
 		return
 	_update_local(_state.get_player(_sim.local_player_id))
 	_update_phase_display()
-	_update_leaderboard()
 	_update_attacks()
 	_update_alerts()
-	_update_modifier_label()
+	leaderboard.update_view()
+	modifier_badges.update_view()
+	truce_panel.update_view()
 	ability_bar.update_view()
 	end_overlay.update_view()
 
@@ -364,28 +339,6 @@ func _update_phase_display() -> void:
 			_timer_label.text = GameState.format_time(_state.match_time)
 
 
-func _update_leaderboard() -> void:
-	var ranked: Array[Player] = _state.players.duplicate()
-	ranked.sort_custom(func(a: Player, b: Player) -> bool: return a.land > b.land)
-	var me: Player = _state.get_player(_sim.local_player_id)
-	var rising_id: int = _sim.rising_empire_id()
-	for i in range(_leader_rows.size()):
-		var row: Dictionary = _leader_rows[i]
-		if i >= ranked.size():
-			row.row.visible = false
-			continue
-		var p: Player = ranked[i]
-		row.row.visible = true
-		row.swatch.color = p.color if p.is_alive else Color(0.25, 0.25, 0.25)
-		var markers: String = ""
-		if rising_id > 0 and p.id == rising_id:
-			markers += " ★"
-		if me != null and p.id != me.id and TrucesOps.has_truce(me, p.id, _state.match_time):
-			markers += " ⚑"
-		row.name.text = p.display_name.left(16) + markers
-		row.land.text = "%.1f%%" % (100.0 * _state.land_fraction(p))
-
-
 func _update_attacks() -> void:
 	var attacks: Array[Attack] = _sim.attacks_by(_sim.local_player_id)
 	for i in range(_attack_rows.size()):
@@ -406,22 +359,6 @@ func _update_alerts() -> void:
 	_announcement_label.visible = active
 	if active:
 		_announcement_label.text = _state.active_announcement_text
-
-
-func _update_modifier_label() -> void:
-	var me: Player = _state.get_player(_sim.local_player_id)
-	if me == null:
-		_modifier_label.text = ""
-		return
-	var parts: Array[String] = []
-	if _sim.is_underdog(me):
-		parts.append("UNDERDOG +25% growth / -25% claim")
-	var upkeep: float = _sim.empire_upkeep(me)
-	if upkeep < 0.0:
-		parts.append("EMPIRE UPKEEP %d%% growth" % int(upkeep * 100.0))
-	if TrucesOps.is_oathbreaker(me, _state.match_time):
-		parts.append("OATHBREAKER +20% attack cost")
-	_modifier_label.text = "   ".join(parts)
 
 
 # --- Slider ------------------------------------------------------------------

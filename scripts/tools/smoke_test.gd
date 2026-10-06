@@ -42,6 +42,7 @@ func _run_all() -> void:
 	var suites: Dictionary = {
 		"buildings": preload("res://scripts/tools/checks_buildings.gd"),
 		"abilities": preload("res://scripts/tools/checks_abilities.gd"),
+		"fairplay": preload("res://scripts/tools/checks_fairplay.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):
@@ -82,15 +83,22 @@ func ff(seconds: float, autopilot: bool = true) -> void:
 	_refresh()
 
 
-# Like ff, but tops the local player's troops up to 40% of the cap when low,
-# so it survives long fast-forwards without steamrolling everyone.
+# Like ff, but keeps the local player alive for feature checks: every half
+# second, enemy attacks on it are called off and its troops get a small floor
+# (300; a % of the cap would snowball). Test-only; the game rules are untouched.
 func ff_safe(seconds: float, autopilot: bool = true) -> void:
 	var left: float = seconds
 	while left > 0.0:
-		var step: float = minf(5.0, left)
+		var step: float = minf(0.5, left)
 		var mine: Player = me()
 		if mine != null and mine.is_alive:
-			mine.troops = maxf(mine.troops, 0.4 * mine.troop_cap())
+			mine.troops = maxf(mine.troops, 300.0)
+			var i: int = 0
+			while i < sim.state.attacks.size():
+				if (sim.state.attacks[i] as Attack).defender_id == mine.id:
+					sim.state.attacks.remove_at(i)
+					continue
+				i += 1
 		ff(step, autopilot)
 		left -= step
 

@@ -71,7 +71,7 @@ func run(t: SmokeTest) -> void:
 	t.ff_safe(Balance.BOMBARD_UNLOCK_SEC - t.sim.state.match_time + 1.0, false)
 	me = t.me()
 	if not me.is_alive:
-		t.check(true, "(local player fell before 3:00 — Bombard checks skipped)")
+		t.check(true, "(local player fell before 3:00 — Bombard checks skipped) [elim at %.0f]" % me.eliminated_at)
 		_bot_usage(t)
 		return
 	me.troops = 2000.0
