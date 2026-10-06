@@ -9,7 +9,7 @@ const MAX_BADGES: int = 6
 const EXPLAIN_SEC: float = 5.0
 
 var _sim: Simulation
-var _row: HBoxContainer
+var _row: HFlowContainer
 var _badges: Array[Button] = []
 var _icons: Array[IconView] = []
 var _labels: Array[Label] = []
@@ -21,13 +21,14 @@ var _explain_left: float = 0.0
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("separation", 4)
-	_row = HBoxContainer.new()
-	_row.add_theme_constant_override("separation", 6)
+	_row = HFlowContainer.new()   # wraps onto a second row instead of growing wider
+	_row.add_theme_constant_override("h_separation", 6)
+	_row.add_theme_constant_override("v_separation", 6)
 	_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_row)
 	for i in range(MAX_BADGES):
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(0, 44)
+		b.custom_minimum_size = Vector2(0, Balance.MIN_BUTTON_PX)
 		b.focus_mode = Control.FOCUS_NONE
 		b.visible = false
 		var box := HBoxContainer.new()
@@ -51,7 +52,7 @@ func _ready() -> void:
 		_explain_texts.append("")
 	_explain = UIStyle.label("", UIStyle.FONT_SMALL)
 	_explain.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_explain.custom_minimum_size = Vector2(520, 0)
+	_explain.custom_minimum_size = Vector2(400, 0)
 	_explain.visible = false
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = UIStyle.PANEL_BG

@@ -34,6 +34,10 @@ func render() -> void:
 	queue_redraw()
 
 
+func texture() -> Texture2D:
+	return _texture
+
+
 func world_size() -> Vector2:
 	if _state == null:
 		return Vector2.ZERO

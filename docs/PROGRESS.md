@@ -328,3 +328,23 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 - Hard bots: watch for Bombard + Rally on a Crown, walls appearing in front of their Crown, and truce offers to you while they fight someone else.
 - Long-press bots of different personalities: Turtles have Forts and walls, Raiders throw big attacks at the weakest neighbour.
 
+## Prompt 12: Mobile controls and HUD
+
+**Built**
+- New screen layout from the design, built with anchors and containers inside the phone's safe area (notches): top bar (Crown button, troop bar that glows green in the sweet spot, troops/s, land %, timer, Menu), bonus/penalty badges and truces top-left, leaderboard top-right, banners in the top centre, send slider + ability bar along the bottom, your attacks and the minimap just above it. Every button is at least 56 px tall.
+- Minimap in the corner: the live map, a box for what you're looking at, and every Crown (yours in gold). Tap or drag on it to jump there.
+- Crown button (top-left): double-tap jumps to your Crown; a single tap tells you that.
+- Touch input rewritten (`scripts/touch_input.gd`): a press becomes a long-press after 0.45 s if your finger stays within 14 px, a drag if it moves further, and a tap otherwise. A second finger cancels the tap and pinches to zoom toward your fingers. Android's fake mouse clicks are ignored, so a tap can't fire twice. A ring fills under your finger while you hold, and the phone gives a short buzz when the long-press triggers.
+- First-time tips (blue banners) the first time you place a Crown, expand, attack, long-press, pan, use an ability, draw walls, send a boat, Bombard, offer a truce, open the Keep, hit the sweet spot, tap the minimap or the Crown button. They're remembered; "Show tips again" in the Menu brings them back.
+- Alerts are a queue of up to 3 banners at the top between the side panels, so they never cover controls. "Your Crown is under attack!" is a red banner with a **Jump** button.
+- Left-handed layout (Menu → Layout): slider, abilities, attack list, minimap and the build / Keep / enemy panels swap sides. Saved in `user://settings.cfg` (new `Settings` autoload, which the sound/vibration settings will use too).
+- The orientation is now "sensor landscape" (works both ways round).
+- Tested at 1920x1080 and 2400x1080, right- and left-handed, with every panel full: automated check that nothing overlaps or leaves the screen and every button is ≥ 56 px. All pass (130 smoke checks in total).
+
+**What to test (on your phone if you can)**
+- Tap free land quickly, then hold on your own land: the ring fills and the build menu opens; a tap never does both.
+- Pinch to zoom with two fingers; drag with one.
+- Tap the minimap; double-tap the Crown button.
+- Menu → Layout: Left-handed. Everything at the bottom swaps sides.
+- Get attacked near your Crown: red banner with Jump, plus a buzz.
+

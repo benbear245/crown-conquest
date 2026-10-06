@@ -44,6 +44,7 @@ func _run_all() -> void:
 		"abilities": preload("res://scripts/tools/checks_abilities.gd"),
 		"fairplay": preload("res://scripts/tools/checks_fairplay.gd"),
 		"bots": preload("res://scripts/tools/checks_bots.gd"),
+		"mobile": preload("res://scripts/tools/checks_mobile.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):
@@ -159,7 +160,7 @@ func drag_to(from: Vector2, to: Vector2) -> void:
 func long_press_tile(t: Vector2i) -> void:
 	var pos: Vector2 = tile_to_screen(t)
 	await press(pos)
-	game.call("_check_long_press", 0.5)
+	(game.get("_touch") as TouchInput).process(0.5)
 	await release(pos)
 
 

@@ -28,13 +28,15 @@ func _ready() -> void:
 		var icon := IconView.new(IconView.Kind.FLAG, 26)
 		row.add_child(icon)
 		var lbl := UIStyle.label("", UIStyle.FONT_SMALL + 1)
-		lbl.custom_minimum_size = Vector2(230, 0)
+		lbl.custom_minimum_size = Vector2(170, 0)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		row.add_child(lbl)
-		var yes := UIStyle.button("Accept", 96)
+		var yes := UIStyle.button("Accept", 88)
 		yes.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		row.add_child(yes)
-		var no := UIStyle.button("Decline", 96)
+		var no := UIStyle.button("Decline", 88)
 		no.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		row.add_child(no)
 		var index: int = i

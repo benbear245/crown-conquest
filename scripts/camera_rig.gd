@@ -25,6 +25,16 @@ func zoom_by(factor: float) -> void:
 	clamp_to_world()
 
 
+# Zoom keeping the world point under `screen_pos` where it is (pinch centre).
+func zoom_at(factor: float, screen_pos: Vector2) -> void:
+	var vp: Vector2 = get_viewport_rect().size
+	var before: Vector2 = position + (screen_pos - vp * 0.5) / zoom.x
+	zoom_by(factor)
+	var after: Vector2 = position + (screen_pos - vp * 0.5) / zoom.x
+	position += before - after
+	clamp_to_world()
+
+
 func pan_screen(relative: Vector2) -> void:
 	position -= relative / zoom.x
 	clamp_to_world()
