@@ -1,7 +1,7 @@
 class_name Bots
 extends RefCounted
 
-# Basic bot brain. Prompt 4: expansion only. Smarter choices land in Prompt 11.
+# Bot brain. Smarter, scored choices land in Prompt 11.
 # Bots call the exact same Simulation commands as the local player.
 
 
@@ -70,12 +70,60 @@ static func _try_build_fort(sim: Simulation, player: Player) -> bool:
 	var cost: float = BuildingsOps.fort_cost_for(player)
 	if player.troops < cost * 1.3:
 		return false
-	# Only Hard bots upgrade Forts aggressively.
-	var tile: int = _pick_safe_build_tile(sim, player)
+	var tile: int = _pick_fort_tile(sim, player)
 	if tile < 0:
 		return false
 	var pos := sim.state.idx_to_xy(tile)
 	return sim.player_build_fort(player.id, pos.x, pos.y)
+
+
+# A Fort is most useful between the Crown and the nearest enemy border, so it
+# covers both the Crown zone and the front. Walk from the contested border
+# tile back toward the Crown and take the first buildable tile that isn't
+# already covered by one of our Forts.
+static func _pick_fort_tile(sim: Simulation, player: Player) -> int:
+	var state: GameState = sim.state
+	if player.crown_x < 0:
+		return -1
+	var crown := Vector2(player.crown_x, player.crown_y)
+	var best_front: int = -1
+	var best_d2: float = INF
+	for i: int in player.border.keys():
+		if not _touches_enemy(state, i, player.id):
+			continue
+		var d2: float = crown.distance_squared_to(Vector2(state.idx_to_xy(i)))
+		if d2 < best_d2:
+			best_d2 = d2
+			best_front = i
+	if best_front < 0:
+		return -1
+	var front := Vector2(state.idx_to_xy(best_front))
+	var steps: int = maxi(1, int(front.distance_to(crown)))
+	for s_i in range(Balance.BUILD_MIN_DIST_FROM_ENEMY + 1, steps + 1):
+		var p: Vector2 = front.lerp(crown, float(s_i) / float(steps))
+		var x: int = int(round(p.x))
+		var y: int = int(round(p.y))
+		if not state.in_bounds(x, y):
+			continue
+		var ti: int = state.idx(x, y)
+		if BuildingsOps.best_fort_defense_at(state, player, ti) > 1.0:
+			return -1   # this approach is already covered
+		if BuildingsOps.tile_is_buildable(sim, player.id, ti):
+			return ti
+	return -1
+
+
+static func _touches_enemy(state: GameState, i: int, my_id: int) -> bool:
+	var pos: Vector2i = state.idx_to_xy(i)
+	for off in Simulation.NEIGHBOR_OFFSETS:
+		var nx: int = pos.x + off.x
+		var ny: int = pos.y + off.y
+		if not state.in_bounds(nx, ny):
+			continue
+		var ow: int = state.owners[state.idx(nx, ny)]
+		if ow > 0 and ow != my_id and ow != GameState.RUINS_OWNER_ID:
+			return true
+	return false
 
 
 static func _try_build_barracks(sim: Simulation, player: Player) -> bool:
@@ -192,10 +240,10 @@ static func _try_attack_weakest(sim: Simulation, player: Player) -> void:
 	var state: GameState = sim.state
 	var neighbour_tile: Dictionary = {}       # defender_id -> example enemy tile idx
 	for i: int in player.border.keys():
-		var pos := state.idx_to_xy(i)
+		var bpos := state.idx_to_xy(i)
 		for off in Simulation.NEIGHBOR_OFFSETS:
-			var nx: int = pos.x + off.x
-			var ny: int = pos.y + off.y
+			var nx: int = bpos.x + off.x
+			var ny: int = bpos.y + off.y
 			if not state.in_bounds(nx, ny):
 				continue
 			var ni := state.idx(nx, ny)

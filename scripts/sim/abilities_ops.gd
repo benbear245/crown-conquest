@@ -25,6 +25,23 @@ static func is_rally_active(p: Player, now: float) -> bool:
 	return p.rally_until > now
 
 
+static func is_active(ability_id: int, p: Player, now: float) -> bool:
+	match ability_id:
+		ID_SWIFT_MARCH:
+			return is_swift_march_active(p, now)
+		ID_CROWN_SHIELD:
+			return is_crown_shield_active(p, now)
+		ID_RALLY:
+			return is_rally_active(p, now)
+		ID_BOMBARD:
+			return p.bombard_until > now
+	return false
+
+
+static func _count_use(p: Player, ability_id: int) -> void:
+	p.abilities_used[ability_id] = int(p.abilities_used.get(ability_id, 0)) + 1
+
+
 static func crown_shield_cooldown_sec(p: Player) -> float:
 	var cd: float = Balance.CROWN_SHIELD_COOLDOWN_SEC
 	if p.keep_level >= 2:
@@ -74,6 +91,7 @@ static func activate_swift_march(sim: Simulation, p: Player) -> bool:
 		return false
 	p.swift_march_until = now + Balance.SWIFT_MARCH_DURATION_SEC
 	p.swift_march_cd_until = now + Balance.SWIFT_MARCH_COOLDOWN_SEC
+	_count_use(p, ID_SWIFT_MARCH)
 	return true
 
 
@@ -85,6 +103,7 @@ static func activate_crown_shield(sim: Simulation, p: Player) -> bool:
 		return false
 	p.crown_shield_until = now + Balance.CROWN_SHIELD_DURATION_SEC
 	p.crown_shield_cd_until = now + crown_shield_cooldown_sec(p)
+	_count_use(p, ID_CROWN_SHIELD)
 	return true
 
 
@@ -100,6 +119,7 @@ static func activate_rally(sim: Simulation, p: Player) -> bool:
 	p.troops -= c
 	p.rally_until = now + Balance.RALLY_DURATION_SEC
 	p.rally_cd_until = now + Balance.RALLY_COOLDOWN_SEC
+	_count_use(p, ID_RALLY)
 	return true
 
 
@@ -120,6 +140,8 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 		return false
 	p.troops -= c
 	p.bombard_cd_until = now + Balance.BOMBARD_COOLDOWN_SEC
+	p.bombard_until = now + Balance.BOMBARD_DURATION_SEC
+	_count_use(p, ID_BOMBARD)
 	state.bombards.append({
 		"owner_id": p.id,
 		"target_x": target_x,

@@ -18,7 +18,7 @@ const RUINS_OWNER_ID: int = 255
 var dirty_tiles: Dictionary = {}
 
 var tick_count: int = 0
-var seed: int = 0
+var match_seed: int = 0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 # Match phase and clocks. Set by Simulation; read by HUD and bots.
@@ -44,30 +44,46 @@ var wall_tiles: Dictionary = {}                # tile_idx -> owner_id
 var building_at_tile: Dictionary = {}
 # Active boats (all players).
 var boats: Array = []                          # Array[Boat]
-# Floating "+N loot" numbers for the HUD. tile_idx -> {owner_id, amount, until}.
-var loot_popups: Dictionary = {}
+# Floating numbers for the HUD ("+75 loot", "+1,240 plunder").
+# Entries: {tile_idx, text, owner_id, until}. Skipped in headless runs.
+var popups: Array = []
 # Active Bombards: each entry has owner_id, target_x, target_y, until.
 var bombards: Array = []
-# Pending truce offers awaiting a bot answer. Entries: {from_id, to_id, decide_at}.
+# Pending truce offers awaiting an answer. Entries: {from_id, to_id, decide_at}.
 var pending_truces: Array = []
+# One-shot events for the presentation layer (sounds, shake, vibration).
+# The game scene drains this every frame; the balance sim clears it.
+var events: Array = []
 
-# End-of-match outcome, set by Simulation._end_match.
+# End-of-match outcome, set by Simulation.end_match.
 var winner_id: int = 0
 var win_reason: String = ""
 # Top-of-screen banner shown by the HUD until the expiry.
 var active_announcement_text: String = ""
 var active_announcement_until: float = 0.0
 
+# Usable (not water / mountain) tile count. Terrain never changes after map
+# generation, so this is computed once.
+var _usable_tiles: int = -1
+
+
+static func format_time(seconds: float) -> String:
+	var total: int = int(seconds)
+	@warning_ignore("integer_division")
+	var mm: int = total / 60
+	var ss: int = total % 60
+	return "%d:%02d" % [mm, ss]
+
 
 func is_final_siege() -> bool:
 	return match_time >= Balance.FINAL_SIEGE_START_SEC
 
 
-func configure(w: int, h: int, match_seed: int) -> void:
+func configure(w: int, h: int, new_seed: int) -> void:
 	width = w
 	height = h
-	seed = match_seed
-	rng.seed = match_seed
+	match_seed = new_seed
+	rng.seed = new_seed
 	terrain = PackedByteArray()
 	terrain.resize(w * h)
 	owners = PackedByteArray()
@@ -82,9 +98,10 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	wall_tiles.clear()
 	building_at_tile.clear()
 	boats = []
-	loot_popups.clear()
+	popups = []
 	bombards = []
 	pending_truces = []
+	events = []
 	winner_id = 0
 	win_reason = ""
 	active_announcement_text = ""
@@ -93,6 +110,7 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	phase = Balance.PHASE_PLACEMENT
 	placement_time_left = Balance.PLACEMENT_PHASE_SEC
 	match_time = 0.0
+	_usable_tiles = -1
 
 
 func tile_count() -> int:
@@ -116,10 +134,7 @@ func get_owner_idx(i: int) -> int:
 
 
 func set_owner(x: int, y: int, owner_id: int) -> void:
-	var i := idx(x, y)
-	if owners[i] != owner_id:
-		owners[i] = owner_id
-		dirty_tiles[i] = true
+	set_owner_idx(idx(x, y), owner_id)
 
 
 func set_owner_idx(i: int, owner_id: int) -> void:
@@ -137,6 +152,7 @@ func set_terrain(x: int, y: int, t: int) -> void:
 	if terrain[i] != t:
 		terrain[i] = t
 		dirty_tiles[i] = true
+		_usable_tiles = -1
 
 
 func is_blocked_terrain(t: int) -> bool:
@@ -145,8 +161,10 @@ func is_blocked_terrain(t: int) -> bool:
 	return Balance.TERRAIN_BLOCKED[t] == 1
 
 
+# Player ids are 1..players.size() in order, so this is an index lookup.
 func get_player(player_id: int) -> Player:
-	for p in players:
+	if player_id >= 1 and player_id <= players.size():
+		var p: Player = players[player_id - 1]
 		if p.id == player_id:
 			return p
 	return null
@@ -161,12 +179,17 @@ func alive_player_count() -> int:
 
 
 func total_usable_tiles() -> int:
-	# Tiles whose terrain is not blocked (mountains or water).
-	var n := 0
-	for i in range(terrain.size()):
-		if not is_blocked_terrain(terrain[i]):
-			n += 1
-	return n
+	if _usable_tiles < 0:
+		var n := 0
+		for i in range(terrain.size()):
+			if not is_blocked_terrain(terrain[i]):
+				n += 1
+		_usable_tiles = n
+	return _usable_tiles
+
+
+func land_fraction(p: Player) -> float:
+	return float(p.land) / float(maxi(total_usable_tiles(), 1))
 
 
 func idx_to_xy(i: int) -> Vector2i:

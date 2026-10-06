@@ -1,16 +1,22 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/map.gd" id="2_map"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="3_hud"]
+[ext_resource type="Script" path="res://scripts/camera_rig.gd" id="4_cam"]
+[ext_resource type="Script" path="res://scripts/world_overlay.gd" id="5_overlay"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_game")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("4_cam")
 
 [node name="Map" type="Node2D" parent="."]
 script = ExtResource("2_map")
+
+[node name="Overlay" type="Node2D" parent="."]
+script = ExtResource("5_overlay")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("3_hud")

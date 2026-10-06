@@ -58,8 +58,8 @@ func _parse_args(args: PackedStringArray) -> Dictionary:
 	return opts
 
 
-func _size_from_name(name: String) -> int:
-	match name.to_lower():
+func _size_from_name(label: String) -> int:
+	match label.to_lower():
 		"small":
 			return Balance.MAP_SIZE_SMALL
 		"large":
@@ -68,8 +68,8 @@ func _size_from_name(name: String) -> int:
 			return Balance.MAP_SIZE_MEDIUM
 
 
-func _map_type_from_name(name: String) -> int:
-	match name.to_lower():
+func _map_type_from_name(label: String) -> int:
+	match label.to_lower():
 		"archipelago":
 			return Balance.MAP_TYPE_ARCHIPELAGO
 		"highlands":
@@ -80,8 +80,8 @@ func _map_type_from_name(name: String) -> int:
 			return Balance.MAP_TYPE_CONTINENT
 
 
-func _mix_from_name(name: String) -> Array:
-	match name.to_lower():
+func _mix_from_name(label: String) -> Array:
+	match label.to_lower():
 		"easy":
 			return [[Balance.BOT_DIFFICULTY_EASY], "Easy only"]
 		"normal":
@@ -107,10 +107,10 @@ func _mix_mixed() -> Array[int]:
 func _run_matches(opts: Dictionary) -> Array:
 	var results: Array = []
 	for i in range(opts.matches):
-		var seed: int = i + 1
+		var match_seed: int = i + 1
 		var sim := Simulation.new()
 		sim.headless = true
-		sim.start_match(opts.size, opts.map_type, seed)
+		sim.start_match(opts.size, opts.map_type, match_seed)
 		_convert_all_to_bots(sim, opts.mix)
 		var leader_at_3min_id: int = -1
 		var sampled: bool = false
@@ -122,7 +122,7 @@ func _run_matches(opts: Dictionary) -> Array:
 			if not sampled and sim.state.match_time >= SAMPLE_LEADER_AT_SEC:
 				sampled = true
 				leader_at_3min_id = _leader_id(sim.state)
-		var stats := _collect_match_stats(sim, leader_at_3min_id, i + 1, seed)
+		var stats := _collect_match_stats(sim, leader_at_3min_id, i + 1, match_seed)
 		results.append(stats)
 		print("[balance]  Match %d/%d  %s" % [i + 1, opts.matches, _match_summary(stats)])
 	return results
@@ -148,7 +148,7 @@ func _leader_id(state: GameState) -> int:
 	return best_id
 
 
-func _collect_match_stats(sim: Simulation, leader_at_3min_id: int, match_number: int, seed: int) -> Dictionary:
+func _collect_match_stats(sim: Simulation, leader_at_3min_id: int, match_number: int, match_seed: int) -> Dictionary:
 	var state: GameState = sim.state
 	var winner: Player = state.get_player(state.winner_id)
 	var total_crowns: int = 0
@@ -161,7 +161,7 @@ func _collect_match_stats(sim: Simulation, leader_at_3min_id: int, match_number:
 		winner_difficulty = winner.difficulty
 	return {
 		"match": match_number,
-		"seed": seed,
+		"seed": match_seed,
 		"duration_sec": state.match_time,
 		"winner_id": state.winner_id,
 		"winner_name": winner.display_name if winner != null else "-",

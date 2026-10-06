@@ -203,6 +203,29 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Capture an enemy Fort/Wall tile — the loot (25% of cost) shows up in your troop pool; next tick the building is gone.
 - Bots: at Normal/Hard, you should see them stand up Forts and Barracks near their Crowns during the midgame and buy Keep 1/2 when they can afford it.
 
+### Prompt 8 follow-up (cloud session)
+
+**Built / fixed**
+- The project didn't start: `game.gd` connected a truce handler that didn't exist. Fixed, and every GDScript warning is gone (checked with Godot's own language server).
+- Split the two giant scripts to follow the 400-line rule: `simulation.gd` now delegates to `territory_ops.gd`, `combat_ops.gd`, `crowns_ops.gd`, `buildings_ops.gd`, `boats_ops.gd`; the HUD panels live in `scripts/ui/`; the camera is `camera_rig.gd`.
+- Build menu always lists Fort/Fort II, Barracks, Port and Walls with cost, effect and how many you have left. Options you can't use are greyed out with the reason ("Need 450 troops", "Within 3 tiles of an enemy", "Unlocks at 1:00", "Must touch water", "Limit reached").
+- Walls: Wall mode now has a banner with a **Done** button and shows "This line: N tiles · cost" while you drag. Fast drags no longer leave gaps. Walls follow the "not within 3 tiles of an enemy" rule like other buildings.
+- Floating "+N loot" numbers now actually appear when you capture a building or wall. Loot is 25% of what the owner really paid (a 3rd Fort pays more loot than a 1st).
+- Boats: tap your Port, then tap a coast. Boats are drawn sailing along their route. Boat attacks are blocked during the peace period; landing on a truce partner breaks the truce.
+- Tap your Crown: the Keep panel shows each level's effects and unlock time, plus **Move Crown** (from the design: once per match from 3:00, 20% of troops, 5 s with no Crown defense).
+- Final Siege now switches off Keep 3's +5% troop cap too (design: "Keep upgrades stop working").
+- Crowns get a gold crown icon on the map.
+- Normal/Hard bots place Forts between their Crown and the nearest enemy border instead of at random.
+- Bots' "Crown under attack" alert now also runs in the simulator (before, simulator bots never saw it, so they never used Crown Shield there).
+- New automated smoke test: `godot --headless --path . res://scenes/tools/smoke_test.tscn` plays the real game scene and checks 38 things (all pass).
+
+**What to test**
+- Long-press your land near the front line: Fort/Barracks rows are grey with "Within 3 tiles of an enemy".
+- Tap Draw walls, drag a quick line across your land: the banner counts tiles and troops, the line has no gaps, Done exits.
+- Build a Port on an Archipelago map, tap it, tap a coast across the water: a boat sails there and grabs land.
+- Let a bot's Fort fall to your attack: "+N loot" floats up.
+- After 3:00 tap your Crown → Move Crown → tap safe land deep inside your territory.
+
 ## Prompt 9: Abilities
 
 **Built**

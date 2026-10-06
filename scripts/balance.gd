@@ -296,8 +296,3 @@ static var BOT_NAMES: PackedStringArray = PackedStringArray([
 	"Marrow", "Hollow", "Rook", "Hale", "Drake", "Ember",
 ])
 
-
-static func generate_name(rng: RandomNumberGenerator) -> String:
-	var title: String = BOT_TITLES[rng.randi() % BOT_TITLES.size()]
-	var name: String = BOT_NAMES[rng.randi() % BOT_NAMES.size()]
-	return "%s %s" % [title, name]

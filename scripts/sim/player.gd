@@ -34,7 +34,23 @@ var think_timer: float = 0.0
 
 # HUD alert when an attack enters this player's Crown zone.
 var crown_alert_until: float = 0.0
+var crown_alert_attacker: int = 0
 var crowns_captured: int = 0
+var eliminated_at: float = -1.0
+
+# Crown move (once per match). While match_time < crown_move_until the Crown
+# has no special defense.
+var crown_moved: bool = false
+var crown_move_until: float = 0.0
+
+# Final Siege switches Keep upgrades off (set by Simulation when it begins).
+var keep_disabled: bool = false
+
+# Usage stats for the balance simulator: building type -> times built,
+# ability id -> times used.
+var buildings_built: Dictionary = {}
+var abilities_used: Dictionary = {}
+var boats_launched: int = 0
 
 # Buildings (counts for cost scaling and limit checks).
 var fort_count: int = 0           # includes Fort II (Fort II upgrades count as one Fort)
@@ -57,6 +73,7 @@ var crown_shield_until: float = 0.0
 var rally_cd_until: float = 0.0
 var rally_until: float = 0.0
 var bombard_cd_until: float = 0.0
+var bombard_until: float = 0.0
 
 # Bot ability-think jitter so they don't all hit buttons on the same tick.
 var ability_think_timer: float = 0.0
@@ -71,7 +88,7 @@ var refuses_all_truces: bool = false
 func troop_cap() -> float:
 	var cap: float = Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)
 	cap *= 1.0 + Balance.BARRACKS_TROOP_CAP_BONUS * float(barracks_count)
-	if keep_level >= 3:
+	if keep_level >= 3 and not keep_disabled:
 		cap *= 1.0 + Balance.KEEP_3_TROOP_CAP_BONUS
 	return cap
 
