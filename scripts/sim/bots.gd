@@ -6,6 +6,12 @@ extends RefCounted
 
 
 static func tick(sim: Simulation, player: Player) -> void:
+	# Ability thinking runs on its own slower timer so bots don't spam buttons.
+	player.ability_think_timer -= Balance.TICK_DELTA
+	if player.ability_think_timer <= 0.0:
+		player.ability_think_timer = sim.state.rng.randf_range(1.0, 2.0)
+		if player.difficulty >= Balance.BOT_DIFFICULTY_NORMAL:
+			_try_abilities(sim, player)
 	player.think_timer -= Balance.TICK_DELTA
 	if player.think_timer > 0.0:
 		return
@@ -19,6 +25,43 @@ static func tick(sim: Simulation, player: Player) -> void:
 		if _try_build_fort(sim, player):
 			return
 	_basic_expand(sim, player)
+
+
+static func _try_abilities(sim: Simulation, player: Player) -> void:
+	var state: GameState = sim.state
+	var now: float = state.match_time
+	# Crown Shield: pop it if an enemy is pressing the Crown zone right now.
+	if player.crown_alert_until > now and not AbilitiesOps.is_crown_shield_active(player, now):
+		sim.player_activate_crown_shield(player.id)
+	# Swift March: during the land rush, if there's free land near our border, cast it.
+	if now < 180.0 and not AbilitiesOps.is_swift_march_active(player, now):
+		if player.swift_march_cd_until <= now:
+			sim.player_activate_swift_march(player.id)
+	# Hard: Rally for ongoing attacks and Bombard on enemy Crown zones.
+	if player.difficulty >= Balance.BOT_DIFFICULTY_HARD:
+		if sim.active_attack_count(player.id) > 0 and not AbilitiesOps.is_rally_active(player, now):
+			if player.rally_cd_until <= now and now >= Balance.RALLY_UNLOCK_SEC:
+				sim.player_activate_rally(player.id)
+		if now >= Balance.BOMBARD_UNLOCK_SEC and player.bombard_cd_until <= now:
+			var tgt: Vector2i = _pick_bombard_target(sim, player)
+			if tgt.x >= 0:
+				sim.player_activate_bombard(player.id, tgt.x, tgt.y)
+
+
+static func _pick_bombard_target(sim: Simulation, player: Player) -> Vector2i:
+	var state: GameState = sim.state
+	# Prefer the nearest enemy Crown within range.
+	var r2: int = Balance.BOMBARD_RANGE_TILES * Balance.BOMBARD_RANGE_TILES
+	for other in state.players:
+		if other.id == player.id or not other.is_alive or other.crown_x < 0:
+			continue
+		for i_v in player.border.keys():
+			var pos: Vector2i = state.idx_to_xy(i_v)
+			var dx: int = pos.x - other.crown_x
+			var dy: int = pos.y - other.crown_y
+			if dx * dx + dy * dy <= r2:
+				return Vector2i(other.crown_x, other.crown_y)
+	return Vector2i(-1, -1)
 
 
 static func _try_build_fort(sim: Simulation, player: Player) -> bool:

@@ -202,3 +202,26 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Build a Port next to the water, then long-press the Port and press Launch boat. The next tap on an unowned/enemy coast within 60 water-tiles sends a boat; the boat lands and either expands (free) or opens an attack (enemy) from the landing tile.
 - Capture an enemy Fort/Wall tile — the loot (25% of cost) shows up in your troop pool; next tick the building is gone.
 - Bots: at Normal/Hard, you should see them stand up Forts and Barracks near their Crowns during the midgame and buy Keep 1/2 when they can afford it.
+
+## Prompt 9: Abilities
+
+**Built**
+- `scripts/sim/abilities_ops.gd` (`AbilitiesOps`): id/label constants, `is_*_active` / `cooldown_until` / `cost_now` / `unlock_sec` lookups, and `activate_*` functions for Swift March / Crown Shield / Rally / Bombard. All validation reads from Balance.
+- `Player` extended with `swift_march_until`, `swift_march_cd_until`, `crown_shield_*`, `rally_*`, `bombard_cd_until` and an `ability_think_timer` so bots don't press buttons every tick.
+- `GameState.bombards` holds active bombard records (owner_id, target_x, target_y, until, last_damage_at). `AbilitiesOps.tick` applies 2 troops/sec damage to each enemy tile inside the area (scaled by elapsed time, so a varying tick cadence stays correct), and marks the area dirty when the bombard starts and ends.
+- `Simulation._attack_tile_cost`: now takes `attacker_id`. Rally multiplies the cost by `1 − 0.30` while active, and `AbilitiesOps.tile_in_any_bombard` halves `extra_def` for tiles inside the area.
+- `Simulation._advance_attack`: skips tiles inside the defender's Crown zone when Crown Shield is active (and Final Siege disables the shield automatically).
+- `Simulation._apply_expansions` + `_expand_one_ring`: Swift March halves the ring interval (effectively doubles speed) and discounts the per-tile claim cost by 25 %.
+- Keep 2 reduces the Crown Shield cooldown by 30 s via `AbilitiesOps.crown_shield_cooldown_sec`.
+- Thin `Simulation.player_activate_swift_march / crown_shield / rally / bombard(target)` commands validate the match phase and forward to the ops layer.
+- `scripts/map.gd`: tiles inside an active bombard area now paint a dark "cracked" tint on top of the base colour; the dirty-tile marks around activation and expiry make it appear and disappear cleanly.
+- `scripts/hud.gd`: a four-button ability bar sits above the slider. Each button shows the ability label plus one of ACTIVE / cd Ns / unlock M:SS / troop cost / ready, and auto-disables when the player can't use it. Pressing Bombard sets a target-selection mode; a hint banner tells the player to tap a target or outside to cancel.
+- `scripts/game.gd`: pressing an ability dispatches to the matching Simulation command (Bombard enters target mode and the next in-bounds tap sends the activation).
+- `scripts/sim/bots.gd`: Normal bots use Swift March in the first three minutes and pop Crown Shield when their Crown is under attack. Hard bots additionally cast Rally while they have an active attack and Bombard when an enemy Crown is within range.
+
+**What to check**
+- Press Swift March — the "Send 10 %" slider still works but expansion rings roll faster and plains cost `2 × 0.75 = 1.5` for the next 8 s. The button shows ACTIVE while running and then "cd Ns".
+- Press Crown Shield when a bot is pressing your Crown — the attack's front freezes on the Crown zone boundary. Button goes ACTIVE, then cooldown. Not available in Final Siege.
+- Press Rally while a bot of yours is running — their per-tile cost drops by 30 % for 10 s. The attack row's troop remainder visibly drains more slowly.
+- Press Bombard, then tap an enemy spot within 20 tiles of your border. A dark cracked overlay appears for 12 s, enemy tiles inside the area lose 2 troops/sec, and attacking into the area pays half the extra defense.
+- Hard bots eventually fire Bombard on your Crown; Normal bots will drop Swift March opening the match.

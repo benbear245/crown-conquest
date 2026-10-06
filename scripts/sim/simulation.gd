@@ -69,6 +69,7 @@ func advance_tick() -> void:
 			_announce_final_siege_once()
 			_apply_growth()
 			_apply_expansions()
+			AbilitiesOps.tick(self)
 			_tick_attacks()
 			_tick_boats()
 			if not headless:
@@ -129,6 +130,8 @@ func _advance_attack(a: Attack) -> void:
 		a.troops_remaining = 0.0
 		return
 	var d_ratio: float = defender.troops / float(defender.land)
+	var shield_active: bool = AbilitiesOps.is_crown_shield_active(defender, state.match_time) and not state.is_final_siege()
+	var shield_r2: int = defender.crown_zone_radius() * defender.crown_zone_radius()
 	var new_front: Dictionary = {}
 	for ni: int in a.front.keys():
 		var cur_owner: int = state.owners[ni]
@@ -136,7 +139,15 @@ func _advance_attack(a: Attack) -> void:
 			continue
 		if state.is_blocked_terrain(state.terrain[ni]):
 			continue
-		var cost: float = _attack_tile_cost(ni, d_ratio)
+		# Crown Shield: can't take tiles inside the defender's Crown zone.
+		if shield_active and defender.crown_x >= 0:
+			var pos2: Vector2i = state.idx_to_xy(ni)
+			var dxs: int = pos2.x - defender.crown_x
+			var dys: int = pos2.y - defender.crown_y
+			if dxs * dxs + dys * dys <= shield_r2:
+				new_front[ni] = true
+				continue
+		var cost: float = _attack_tile_cost(ni, d_ratio, a.attacker_id)
 		if a.troops_remaining < cost:
 			new_front[ni] = true
 			continue
@@ -161,13 +172,22 @@ func _advance_attack(a: Attack) -> void:
 	a.front = new_front
 
 
-func _attack_tile_cost(tile_idx: int, d_ratio: float) -> float:
+func _attack_tile_cost(tile_idx: int, d_ratio: float, attacker_id: int = 0) -> float:
 	var t: int = state.terrain[tile_idx]
 	var terrain_def: float = 1.0
 	if t >= 0 and t < Balance.TERRAIN_DEFENSE.size():
 		terrain_def = Balance.TERRAIN_DEFENSE[t]
 	var extra_def: float = combined_defense_at(tile_idx)
-	return Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_def * extra_def
+	# Bombard halves the defender's defense on tiles inside its area.
+	if AbilitiesOps.tile_in_any_bombard(state, tile_idx):
+		extra_def *= Balance.BOMBARD_DEFENSE_MULT
+	var cost: float = Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_def * extra_def
+	# Rally reduces attack cost by 30% while active.
+	if attacker_id > 0:
+		var p: Player = state.get_player(attacker_id)
+		if p != null and AbilitiesOps.is_rally_active(p, state.match_time):
+			cost *= (1.0 - Balance.RALLY_ATTACK_DISCOUNT)
+	return cost
 
 
 # Non-terrain defense: Crown tile and zone, plus Fort and Wall.
@@ -417,7 +437,11 @@ func _apply_expansions() -> void:
 		p.expansion_timer -= Balance.TICK_DELTA
 		if p.expansion_timer > 0.0:
 			continue
-		p.expansion_timer += Balance.EXPANSION_RING_INTERVAL_SEC
+		# Swift March doubles the ring speed (half the interval).
+		var interval: float = Balance.EXPANSION_RING_INTERVAL_SEC
+		if AbilitiesOps.is_swift_march_active(p, state.match_time):
+			interval *= 1.0 / Balance.SWIFT_MARCH_SPEED_MULT
+		p.expansion_timer += interval
 		_expand_one_ring(p)
 
 
@@ -645,10 +669,13 @@ func _expand_one_ring(player: Player) -> void:
 	if frontier.is_empty():
 		_refund_expansion(player)
 		return
+	var discount: float = 1.0
+	if AbilitiesOps.is_swift_march_active(player, state.match_time):
+		discount = 1.0 - Balance.SWIFT_MARCH_CLAIM_DISCOUNT
 	var min_cost := INF
 	for ni: int in frontier:
 		var ow: int = state.owners[ni]
-		var cost := _claim_cost_idx(ni, ow)
+		var cost := _claim_cost_idx(ni, ow) * discount
 		if cost < min_cost:
 			min_cost = cost
 		if player.expansion_troops < cost:
@@ -887,6 +914,44 @@ func player_launch_boat(player_id: int, port_x: int, port_y: int,
 	if p == null or not p.is_alive:
 		return false
 	return BoatsOps.try_launch(self, p, port_x, port_y, target_x, target_y, fraction)
+
+
+# --- Ability commands -------------------------------------------------------
+
+func player_activate_swift_march(player_id: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return AbilitiesOps.activate_swift_march(self, p)
+
+
+func player_activate_crown_shield(player_id: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return AbilitiesOps.activate_crown_shield(self, p)
+
+
+func player_activate_rally(player_id: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return AbilitiesOps.activate_rally(self, p)
+
+
+func player_activate_bombard(player_id: int, target_x: int, target_y: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return AbilitiesOps.activate_bombard(self, p, target_x, target_y)
 
 
 # --- Boats and loot popups ---------------------------------------------------

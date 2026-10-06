@@ -50,6 +50,18 @@ func _color_for_tile(i: int) -> Color:
 	var base := _base_color_for_tile(i)
 	if _state.flash_tiles.has(i) and _state.match_time < _state.flash_tiles[i]:
 		return base.lerp(Color(1, 1, 1), 0.55)
+	# Bombard: tiles inside an active bombard area look cracked.
+	if _state.bombards.size() > 0:
+		var pos := _state.idx_to_xy(i)
+		var r2: int = Balance.BOMBARD_AREA_RADIUS_TILES * Balance.BOMBARD_AREA_RADIUS_TILES
+		for b_v in _state.bombards:
+			var b: Dictionary = b_v
+			if _state.match_time >= float(b["until"]):
+				continue
+			var dx: int = pos.x - int(b["target_x"])
+			var dy: int = pos.y - int(b["target_y"])
+			if dx * dx + dy * dy <= r2:
+				return base.lerp(Color(0.08, 0.06, 0.10), 0.45)
 	return base
 
 

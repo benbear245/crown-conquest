@@ -48,6 +48,7 @@ func _ready() -> void:
 	_hud.buy_keep_requested.connect(_on_buy_keep_requested)
 	_hud.wall_mode_toggled.connect(_on_wall_mode_toggled)
 	_hud.boat_launch_requested.connect(_on_boat_launch_requested)
+	_hud.ability_pressed.connect(_on_ability_pressed)
 	_init_camera()
 
 
@@ -186,6 +187,11 @@ func _try_tap(screen_pos: Vector2) -> void:
 		Balance.PHASE_PLACEMENT:
 			_simulation.player_place_crown(local_id, tile.x, tile.y)
 		Balance.PHASE_MATCH:
+			# Bombard target selection.
+			if _hud.is_bombard_target_mode():
+				_simulation.player_activate_bombard(local_id, tile.x, tile.y)
+				_hud.set_bombard_target_mode(false)
+				return
 			# Boat landing selection.
 			if _pending_boat_port.x >= 0:
 				var frac := _hud.send_fraction()
@@ -311,3 +317,16 @@ func _on_wall_mode_toggled(_enabled: bool) -> void:
 
 func _on_boat_launch_requested(port_x: int, port_y: int) -> void:
 	_pending_boat_port = Vector2i(port_x, port_y)
+
+
+func _on_ability_pressed(ability_id: int) -> void:
+	var pid: int = _simulation.local_player_id
+	match ability_id:
+		AbilitiesOps.ID_SWIFT_MARCH:
+			_simulation.player_activate_swift_march(pid)
+		AbilitiesOps.ID_CROWN_SHIELD:
+			_simulation.player_activate_crown_shield(pid)
+		AbilitiesOps.ID_RALLY:
+			_simulation.player_activate_rally(pid)
+		AbilitiesOps.ID_BOMBARD:
+			_hud.set_bombard_target_mode(true)

@@ -48,6 +48,19 @@ var keep_level: int = 0
 # Fort tile indices this player owns (used for defense lookup, max 6).
 var fort_tiles: PackedInt32Array = PackedInt32Array()
 
+# Ability state. "*_cd_until" is the absolute match_time when the cooldown ends;
+# "*_until" is when the active effect ends (or 0.0 if not active).
+var swift_march_cd_until: float = 0.0
+var swift_march_until: float = 0.0
+var crown_shield_cd_until: float = 0.0
+var crown_shield_until: float = 0.0
+var rally_cd_until: float = 0.0
+var rally_until: float = 0.0
+var bombard_cd_until: float = 0.0
+
+# Bot ability-think jitter so they don't all hit buttons on the same tick.
+var ability_think_timer: float = 0.0
+
 
 func troop_cap() -> float:
 	var cap: float = Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)

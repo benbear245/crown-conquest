@@ -25,6 +25,7 @@ signal build_port_requested(x: int, y: int)
 signal buy_keep_requested(level: int)
 signal wall_mode_toggled(enabled: bool)
 signal boat_launch_requested(port_x: int, port_y: int)
+signal ability_pressed(ability_id: int)
 
 var _sim: Simulation
 var _state: GameState
@@ -70,6 +71,12 @@ var _keep_buttons: Array = []
 # Status row above the slider (building counts + wall/boat mode banner).
 var _status_label: Label
 
+# Ability bar (4 buttons: Swift March / Crown Shield / Rally / Bombard).
+var _ability_bar: PanelContainer
+var _ability_buttons: Array = []
+var _bombard_target_mode: bool = false
+var _bombard_hint_label: Label
+
 
 func _ready() -> void:
 	layer = 10
@@ -82,6 +89,7 @@ func _ready() -> void:
 	_build_end_overlay()
 	_build_build_menu()
 	_build_keep_panel()
+	_build_ability_bar()
 
 
 func setup(sim: Simulation) -> void:
@@ -449,6 +457,7 @@ func update_from_state() -> void:
 	_update_alerts()
 	_update_announcement()
 	_update_end_overlay()
+	_update_ability_bar()
 
 
 func _update_alerts() -> void:
@@ -900,3 +909,94 @@ func close_keep_panel() -> void:
 
 func is_keep_panel_open() -> bool:
 	return _keep_panel != null and _keep_panel.visible
+
+
+# --- Ability bar -------------------------------------------------------------
+
+const ABILITY_LABELS: Array[String] = ["Swift March", "Crown Shield", "Rally", "Bombard"]
+
+func _build_ability_bar() -> void:
+	_ability_bar = PanelContainer.new()
+	_ability_bar.anchor_left = 0.5
+	_ability_bar.anchor_right = 0.5
+	_ability_bar.anchor_top = 1.0
+	_ability_bar.anchor_bottom = 1.0
+	_ability_bar.offset_left = -260
+	_ability_bar.offset_right = 260
+	_ability_bar.offset_top = -(Balance.MIN_BUTTON_PX + 108)
+	_ability_bar.offset_bottom = -(Balance.MIN_BUTTON_PX + 44)
+	add_child(_ability_bar)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	_ability_bar.add_child(row)
+
+	for i in range(4):
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(120, Balance.MIN_BUTTON_PX)
+		var local_id: int = i
+		btn.pressed.connect(func() -> void: ability_pressed.emit(local_id))
+		row.add_child(btn)
+		_ability_buttons.append(btn)
+
+	_bombard_hint_label = Label.new()
+	_bombard_hint_label.anchor_left = 0.5
+	_bombard_hint_label.anchor_right = 0.5
+	_bombard_hint_label.anchor_top = 1.0
+	_bombard_hint_label.anchor_bottom = 1.0
+	_bombard_hint_label.offset_left = -260
+	_bombard_hint_label.offset_right = 260
+	_bombard_hint_label.offset_top = -(Balance.MIN_BUTTON_PX + 136)
+	_bombard_hint_label.offset_bottom = -(Balance.MIN_BUTTON_PX + 110)
+	_bombard_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_label_style(_bombard_hint_label)
+	_bombard_hint_label.add_theme_font_size_override("font_size", 16)
+	_bombard_hint_label.text = ""
+	_bombard_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bombard_hint_label)
+
+
+func set_bombard_target_mode(enabled: bool) -> void:
+	_bombard_target_mode = enabled
+	_bombard_hint_label.text = "Tap a target within 20 tiles of your border — tap outside to cancel" if enabled else ""
+
+
+func is_bombard_target_mode() -> bool:
+	return _bombard_target_mode
+
+
+func _update_ability_bar() -> void:
+	if _ability_bar == null:
+		return
+	var local: Player = _local_player()
+	for i in range(_ability_buttons.size()):
+		var btn: Button = _ability_buttons[i]
+		if local == null or not local.is_alive:
+			btn.disabled = true
+			btn.text = ABILITY_LABELS[i]
+			continue
+		var cd_until: float = AbilitiesOps.cooldown_until(i, local)
+		var now: float = _state.match_time
+		var unlocked: bool = now >= AbilitiesOps.unlock_sec(i)
+		var active: bool = false
+		match i:
+			AbilitiesOps.ID_SWIFT_MARCH:
+				active = AbilitiesOps.is_swift_march_active(local, now)
+			AbilitiesOps.ID_CROWN_SHIELD:
+				active = AbilitiesOps.is_crown_shield_active(local, now)
+			AbilitiesOps.ID_RALLY:
+				active = AbilitiesOps.is_rally_active(local, now)
+		var cost: float = AbilitiesOps.cost_now(i, local)
+		var state_label: String
+		if not unlocked:
+			state_label = "unlocks %s" % HUD.format_time(AbilitiesOps.unlock_sec(i) - now)
+		elif active:
+			state_label = "ACTIVE"
+		elif cd_until > now:
+			state_label = "cd %ds" % int(ceilf(cd_until - now))
+		elif cost > 0.0:
+			state_label = "%d" % int(cost)
+		else:
+			state_label = "ready"
+		btn.text = "%s\n%s" % [ABILITY_LABELS[i], state_label]
+		btn.disabled = (not unlocked) or (cd_until > now) or (cost > 0.0 and local.troops < cost)

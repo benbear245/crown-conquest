@@ -46,6 +46,8 @@ var building_at_tile: Dictionary = {}
 var boats: Array = []                          # Array[Boat]
 # Floating "+N loot" numbers for the HUD. tile_idx -> {owner_id, amount, until}.
 var loot_popups: Dictionary = {}
+# Active Bombards: each entry has owner_id, target_x, target_y, until.
+var bombards: Array = []
 
 # End-of-match outcome, set by Simulation._end_match.
 var winner_id: int = 0
@@ -79,6 +81,7 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	building_at_tile.clear()
 	boats = []
 	loot_popups.clear()
+	bombards = []
 	winner_id = 0
 	win_reason = ""
 	active_announcement_text = ""
