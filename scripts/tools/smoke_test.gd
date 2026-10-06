@@ -57,6 +57,7 @@ func _run_all() -> void:
 		"menus": preload("res://scripts/tools/checks_menus.gd"),
 		"progression": preload("res://scripts/tools/checks_progression.gd"),
 		"tutorial": preload("res://scripts/tools/checks_tutorial.gd"),
+		"android": preload("res://scripts/tools/checks_android.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):

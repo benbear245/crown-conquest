@@ -23,6 +23,9 @@ static func tick(sim: Simulation, player: Player) -> void:
 	player.think_timer -= Balance.TICK_DELTA
 	if player.think_timer > 0.0:
 		return
+	if state.bot_thinks_left <= 0:
+		return   # enough bots thought this tick; this one goes next tick
+	state.bot_thinks_left -= 1
 	player.think_timer = _think_interval(player.difficulty, state.rng)
 	if player.ally_id > 0:
 		_support_ally(sim, player)

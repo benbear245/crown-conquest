@@ -39,26 +39,30 @@ static func player_expand(sim: Simulation, player_id: int, tx: int, ty: int, fra
 
 static func apply_expansions(sim: Simulation) -> void:
 	var state: GameState = sim.state
+	var budget: int = Balance.EXPANSION_TILES_PER_TICK_BUDGET
 	for p: Player in state.players:
 		if p.expansion_troops <= 0.0 or not p.is_alive:
 			continue
 		p.expansion_timer -= Balance.TICK_DELTA
 		if p.expansion_timer > 0.0:
 			continue
+		if budget <= 0:
+			continue   # this tick's budget is used up: expand next tick
 		# Swift March doubles the ring speed (half the interval).
 		var interval: float = Balance.EXPANSION_RING_INTERVAL_SEC
 		if AbilitiesOps.is_swift_march_active(p, state.match_time):
 			interval *= 1.0 / Balance.SWIFT_MARCH_SPEED_MULT
 		p.expansion_timer += interval
-		expand_one_ring(sim, p)
+		budget -= expand_one_ring(sim, p, mini(budget, Balance.EXPANSION_MAX_TILES_PER_RING))
 
 
-static func expand_one_ring(sim: Simulation, player: Player) -> void:
+# Claims one ring of free land (at most max_tiles). Returns tiles claimed.
+static func expand_one_ring(sim: Simulation, player: Player, max_tiles: int = Balance.EXPANSION_MAX_TILES_PER_RING) -> int:
 	var state: GameState = sim.state
 	var frontier: PackedInt32Array = collect_frontier(state, player)
 	if frontier.is_empty():
 		refund_expansion(player)
-		return
+		return 0
 	var discount: float = claim_discount(sim, player)
 	var claim_costs: PackedFloat32Array = Balance.TERRAIN_CLAIM_COST
 	var terrain: PackedByteArray = state.terrain
@@ -75,6 +79,9 @@ static func expand_one_ring(sim: Simulation, player: Player) -> void:
 			min_cost = cost
 		if player.expansion_troops < cost:
 			continue
+		if claimed >= max_tiles:
+			min_cost = 0.0   # stopped early, not out of troops: no refund
+			break
 		player.expansion_troops -= cost
 		claimed += 1
 		@warning_ignore("integer_division")
@@ -83,6 +90,7 @@ static func expand_one_ring(sim: Simulation, player: Player) -> void:
 		sim.emit_event({"type": "expand", "player_id": player.id, "tiles": claimed})
 	if player.expansion_troops < min_cost:
 		refund_expansion(player)
+	return claimed
 
 
 # Multiplier on free-land and Ruins claim costs: Swift March and Underdog.
@@ -285,15 +293,3 @@ static func tile_touches_player(state: GameState, x: int, y: int, player_id: int
 		if state.owners[state.idx(nx, ny)] == player_id:
 			return true
 	return false
-
-
-static func rebuild_borders_for_all(state: GameState) -> void:
-	for p: Player in state.players:
-		p.border.clear()
-	for i in range(state.owners.size()):
-		var ow: int = state.owners[i]
-		var p: Player = state.get_player(ow)
-		if p == null:
-			continue
-		if tile_is_border(state, i, ow):
-			p.border[i] = true

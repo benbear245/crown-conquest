@@ -29,6 +29,8 @@ var _was_in_sweet_spot: bool = false
 
 
 func _ready() -> void:
+	# Phones keep the screen on during a match (the menus let it sleep).
+	DisplayServer.screen_set_keep_on(true)
 	_simulation = Simulation.new()
 	_config = Session.current_config()
 	_simulation.start_with(_config, _config.next_seed())

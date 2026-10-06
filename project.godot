@@ -10,10 +10,12 @@ config_version=5
 
 [application]
 
-config/name="CrownConquest"
+config/name="Crown Conquest"
 run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
-config/icon="res://icon.svg"
+config/icon="res://assets/icon/icon_512.png"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="CrownConquest"
 
 [autoload]
 
@@ -30,6 +32,7 @@ window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
+window/energy_saving/keep_screen_on=false
 
 [physics]
 

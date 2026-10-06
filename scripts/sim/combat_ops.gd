@@ -83,19 +83,25 @@ static func build_attack_front(state: GameState, attacker_id: int, defender_id: 
 	var attacker: Player = state.get_player(attacker_id)
 	if attacker == null:
 		return out
+	# Inline index maths (a Large empire's border is 1,000+ tiles and bots
+	# start attacks often). Neighbour order: right, left, down, up, the same
+	# as NEIGHBOR_OFFSETS, so the front's order is unchanged.
+	var owners: PackedByteArray = state.owners
+	var blocked: PackedByteArray = state.blocked
+	var w: int = state.width
+	var h: int = state.height
 	for i: int in attacker.border.keys():
-		var pos: Vector2i = state.idx_to_xy(i)
-		for off in NEIGHBOR_OFFSETS:
-			var nx: int = pos.x + off.x
-			var ny: int = pos.y + off.y
-			if not state.in_bounds(nx, ny):
-				continue
-			var ni: int = state.idx(nx, ny)
-			if state.owners[ni] != defender_id:
-				continue
-			if state.is_blocked_terrain(state.terrain[ni]):
-				continue
-			out[ni] = true
+		var x: int = i % w
+		@warning_ignore("integer_division")
+		var y: int = i / w
+		if x + 1 < w and owners[i + 1] == defender_id and blocked[i + 1] == 0:
+			out[i + 1] = true
+		if x > 0 and owners[i - 1] == defender_id and blocked[i - 1] == 0:
+			out[i - 1] = true
+		if y + 1 < h and owners[i + w] == defender_id and blocked[i + w] == 0:
+			out[i + w] = true
+		if y > 0 and owners[i - w] == defender_id and blocked[i - w] == 0:
+			out[i - w] = true
 	return out
 
 
@@ -103,6 +109,7 @@ static func build_attack_front(state: GameState, attacker_id: int, defender_id: 
 
 static func tick_attacks(sim: Simulation) -> void:
 	var state: GameState = sim.state
+	var budget: int = attack_tile_budget(state)
 	var i: int = 0
 	while i < state.attacks.size():
 		var a: Attack = state.attacks[i]
@@ -110,15 +117,28 @@ static func tick_attacks(sim: Simulation) -> void:
 			state.attacks.remove_at(i)
 			continue
 		a.advance_timer -= Balance.TICK_DELTA
-		if a.advance_timer > 0.0:
-			i += 1
+		if not a.ring_active:
+			if a.advance_timer > 0.0:
+				i += 1
+				continue
+			a.advance_timer += Balance.ATTACK_RING_INTERVAL_SEC
+			start_ring(a)
+		if budget <= 0:
+			i += 1   # out of budget this tick: this ring carries on next tick
 			continue
-		a.advance_timer += Balance.ATTACK_RING_INTERVAL_SEC
-		advance_attack(sim, a)
-		# advance_attack may have removed this attack (defender eliminated).
+		var before: int = a.ring_pos
+		var finished: bool = advance_ring(sim, a, mini(a.ring_chunk, budget))
+		budget -= a.ring_pos - before
+		# The ring may have removed this attack (defender eliminated).
 		if i >= state.attacks.size() or state.attacks[i] != a:
 			continue
-		if a.troops_remaining <= 0.0 or a.front.is_empty():
+		if a.troops_remaining <= 0.0:
+			state.attacks.remove_at(i)
+			continue
+		if not finished:
+			i += 1
+			continue
+		if a.front.is_empty():
 			state.attacks.remove_at(i)
 			continue
 		# Stalled: took nothing and can't pay for any tile on the front (and
@@ -132,15 +152,50 @@ static func tick_attacks(sim: Simulation) -> void:
 		i += 1
 
 
-# One ring of an attack. The per-tile price is the same maths as
-# attack_tile_cost() + combined_defense_at(), with everything that is constant
-# for the ring worked out once up front (this loop is the simulator's hot path).
+# Attack tiles all attacks may take this tick: the Medium-map budget, scaled
+# down for bigger maps (more players, more work each tick).
+static func attack_tile_budget(state: GameState) -> int:
+	var medium: float = float(Balance.MAP_MEDIUM_WIDTH * Balance.MAP_MEDIUM_HEIGHT)
+	var k: float = minf(1.0, medium / float(maxi(state.tile_count(), 1)))
+	return maxi(50, roundi(Balance.ATTACK_TILES_PER_TICK_BUDGET * k))
+
+
+# Ticks a ring is spread over (4 at 0.4 s per ring and 10 ticks per second).
+static func ring_ticks() -> int:
+	return maxi(1, roundi(Balance.ATTACK_RING_INTERVAL_SEC / Balance.TICK_DELTA))
+
+
+# Starts eating the current front: the ring's tiles are worked through over
+# the next ring_ticks() ticks, a share per tick.
+static func start_ring(a: Attack) -> void:
+	a.ring_active = true
+	a.ring_queue = a.front.keys()
+	a.ring_pos = 0
+	a.ring_chunk = mini(ceili(float(a.ring_queue.size()) / float(ring_ticks())), Balance.ATTACK_RING_MAX_TILES_PER_TICK)
+	a.ring_new_front = {}
+	a.tiles_taken_last_ring = 0
+	a.cheapest_blocked_cost = INF
+	a.shield_blocked = false
+
+
+# A whole ring at once (tests and tools; the game spreads it over ticks).
 static func advance_attack(sim: Simulation, a: Attack) -> void:
+	start_ring(a)
+	advance_ring(sim, a, a.ring_queue.size())
+
+
+# Works through up to `max_tiles` tiles of the current ring; returns true when
+# the ring is done (then `front` becomes the new front). The per-tile price is
+# the same maths as attack_tile_cost() + combined_defense_at(), with
+# everything that is constant for this batch worked out once up front (this
+# loop is the simulator's hot path).
+static func advance_ring(sim: Simulation, a: Attack, max_tiles: int) -> bool:
 	var state: GameState = sim.state
 	var defender: Player = state.get_player(a.defender_id)
 	if defender == null or not defender.is_alive or defender.land <= 0:
 		a.troops_remaining = 0.0
-		return
+		a.ring_active = false
+		return true
 	var attacker: Player = state.get_player(a.attacker_id)
 	var now: float = state.match_time
 	var w: int = state.width
@@ -159,7 +214,8 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 	var crown_tile_def: float = Balance.FINAL_SIEGE_CROWN_TILE_DEFENSE if is_siege else defender.crown_tile_defense()
 	var zone_on: bool = crown_active and not is_siege and cx >= 0
 	var zone_def: float = defender.crown_zone_defense()
-	var forts: Array = _fort_cache(state, defender)
+	var forts: PackedInt32Array = _fort_cache(state, defender)
+	var has_walls: bool = defender.wall_count > 0
 	var any_bombard: bool = not state.bombards.is_empty()
 	var terrain_defense: PackedFloat32Array = Balance.TERRAIN_DEFENSE
 	# Attacker multipliers (see attack_tile_cost).
@@ -167,11 +223,12 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 	var oath_on: bool = attacker != null and TrucesOps.is_oathbreaker(attacker, now)
 	var rising: int = sim.rising_empire_id()
 	var rising_on: bool = attacker != null and rising > 0 and a.defender_id == rising and a.attacker_id != rising
-	var new_front: Dictionary = {}
-	a.tiles_taken_last_ring = 0
-	a.cheapest_blocked_cost = INF
-	a.shield_blocked = false
-	for ni: int in a.front.keys():
+	var new_front: Dictionary = a.ring_new_front
+	var queue: Array = a.ring_queue
+	var end: int = mini(queue.size(), a.ring_pos + maxi(max_tiles, 1))
+	while a.ring_pos < end:
+		var ni: int = queue[a.ring_pos]
+		a.ring_pos += 1
 		if owners[ni] != a.defender_id:
 			continue
 		if state.blocked[ni] == 1:
@@ -189,7 +246,8 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 			continue
 		# --- tile cost ---
 		var extra_def: float
-		if crown_active and state.crown_tiles.has(ni) and state.crown_tiles[ni] == a.defender_id:
+		# (Crown tiles always sit inside the Crown zone, so skip the lookup outside it.)
+		if crown_active and in_zone and state.crown_tiles.has(ni) and state.crown_tiles[ni] == a.defender_id:
 			extra_def = crown_tile_def
 		else:
 			var def: float = 1.0
@@ -197,7 +255,7 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 				def *= zone_def
 			if not forts.is_empty():
 				def *= _best_fort(forts, x, y)
-			if state.wall_tiles.has(ni) and state.wall_tiles[ni] == a.defender_id:
+			if has_walls and state.wall_tiles.has(ni) and state.wall_tiles[ni] == a.defender_id:
 				def *= Balance.WALL_DEFENSE
 			extra_def = minf(def, Balance.BUILDING_DEFENSE_CAP)
 		if any_bombard and AbilitiesOps.tile_in_any_bombard(state, ni):
@@ -225,9 +283,10 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 		if not sim.headless:
 			sim.mark_flash(ni)
 		if ni == centre_idx:
+			a.ring_active = false
 			eliminate_player(sim, a.defender_id, a.attacker_id)
 			# Defender is gone; this attack was removed by end_attacks_touching.
-			return
+			return true
 		# Defender tiles next to the captured one join the front (right, left, down, up).
 		if x + 1 < w and owners[ni + 1] == a.defender_id:
 			new_front[ni + 1] = true
@@ -237,35 +296,46 @@ static func advance_attack(sim: Simulation, a: Attack) -> void:
 			new_front[ni + w] = true
 		if y > 0 and owners[ni - w] == a.defender_id:
 			new_front[ni - w] = true
+	if a.ring_pos < queue.size():
+		return false
+	a.ring_active = false
+	a.ring_queue = []
+	a.ring_new_front = {}
 	a.front = new_front
 	a.zone_cache_valid = false
 	if a.tiles_taken_last_ring > 0:
 		sim.emit_event({"type": "attack_ring", "attacker_id": a.attacker_id, "defender_id": a.defender_id, "tiles": a.tiles_taken_last_ring})
 	a.stalled_rings = 0 if a.tiles_taken_last_ring > 0 else a.stalled_rings + 1
+	return true
 
 
-# The defender's Forts as flat [x, y, r^2, mult] entries.
-static func _fort_cache(state: GameState, owner: Player) -> Array:
-	var out: Array = []
+# The defender's Forts packed flat: x, y, r^2 and the defense multiplier x 1000
+# per Fort (a packed array is much faster to walk than an array of arrays).
+static func _fort_cache(state: GameState, owner: Player) -> PackedInt32Array:
+	var out := PackedInt32Array()
 	for ft_idx: int in owner.fort_tiles:
 		var b: Building = state.building_at_tile.get(ft_idx, null)
 		if b == null or b.owner_id != owner.id:
 			continue
 		var r: int = b.radius()
-		out.append([b.x, b.y, r * r, b.defense_mult()])
+		out.append(b.x)
+		out.append(b.y)
+		out.append(r * r)
+		out.append(roundi(b.defense_mult() * 1000.0))
 	return out
 
 
-static func _best_fort(forts: Array, x: int, y: int) -> float:
-	var best: float = 1.0
-	for f: Array in forts:
-		var fdx: int = x - int(f[0])
-		var fdy: int = y - int(f[1])
-		if fdx * fdx + fdy * fdy <= int(f[2]):
-			var m: float = f[3]
-			if m > best:
-				best = m
-	return best
+static func _best_fort(forts: PackedInt32Array, x: int, y: int) -> float:
+	var best: int = 1000
+	var k: int = 0
+	var n: int = forts.size()
+	while k < n:
+		var fdx: int = x - forts[k]
+		var fdy: int = y - forts[k + 1]
+		if fdx * fdx + fdy * fdy <= forts[k + 2] and forts[k + 3] > best:
+			best = forts[k + 3]
+		k += 4
+	return best / 1000.0
 
 
 static func attack_tile_cost(sim: Simulation, tile_idx: int, d_ratio: float, attacker_id: int = 0) -> float:
@@ -381,11 +451,14 @@ static func eliminate_player(sim: Simulation, victim_id: int, capturer_id: int) 
 		capturer.crowns_captured += 1
 		if victim.crown_x >= 0:
 			sim.add_popup(state.idx(victim.crown_x, victim.crown_y), "+%s plunder" % GameState.format_int(int(plunder)), capturer_id)
-	# Victim's territory becomes Ruins.
-	for i in range(state.owners.size()):
-		if state.owners[i] == victim_id:
-			state.owners[i] = GameState.RUINS_OWNER_ID
-			state.dirty_tiles[i] = true
+	# Victim's territory becomes Ruins. find() is native code and jumps
+	# straight to the victim's tiles (a GDScript loop over a Large map took
+	# several ms); the Map repaints it all over the next frames.
+	var i: int = state.owners.find(victim_id)
+	while i != -1:
+		state.owners[i] = GameState.RUINS_OWNER_ID
+		i = state.owners.find(victim_id, i + 1)
+	state.repaint_all = state.track_dirty
 	# Drop the victim's Crown data.
 	for t_idx: int in state.crown_tiles.keys():
 		if state.crown_tiles[t_idx] == victim_id:
@@ -400,7 +473,8 @@ static func eliminate_player(sim: Simulation, victim_id: int, capturer_id: int) 
 		other.active_truces.erase(victim_id)
 	BuildingsOps.remove_all_for(state, victim)
 	end_attacks_touching(state, victim_id)
-	TerritoryOps.rebuild_borders_for_all(state)
+	# Other players' borders don't change: the victim's land was already "not
+	# theirs" and Ruins still are, so no full-map border rebuild is needed.
 	var capturer_name: String = capturer.display_name if capturer != null else "An attacker"
 	sim.announce("%s has taken %s's Crown!" % [capturer_name, victim.display_name], 5.0)
 	sim.emit_event({

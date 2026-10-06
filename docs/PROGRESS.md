@@ -479,3 +479,40 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 - Watch the endgame after 10:00: bots should make big pushes instead of small back-and-forth attacks.
 - Build Forts (now 400) and Walls: do they still feel worth it?
 - Try an Archipelago map: with boats reaching 120 tiles, Ports should matter a lot more.
+
+## Prompt 18: Performance and Android
+
+**Profiling** (`scenes/tools/sim_profile.tscn`, now with `--real` to run the way the game does, tick percentiles, how many ticks blow the 10 ms budget, and what the slowest ticks spent their time on). Large map, 12 players, whole matches:
+
+| | Before | After |
+| --- | --- | --- |
+| Ticks over 10 ms | 96 of 17,616 | **0 of 39,736** |
+| Worst tick | 98.8 ms | **9.2 ms** |
+| p99 / median tick | 7.4 ms / 0.54 ms | **3.4 ms / 0.76 ms** |
+
+(Numbers are this cloud machine's CPU; a phone is roughly 3–5× slower, which is why I left plenty of headroom. On rare occasions this machine itself stalls for 20–100 ms; those spikes didn't reproduce when the identical match was rerun, so they're not the game.)
+
+What was slow, and the fix:
+- **A Crown falling** scanned the whole map twice (turn the loser's land into Ruins, then rebuild every player's border from scratch): 45–60 ms. Now native `find()` jumps straight to the loser's tiles, and the border rebuild is gone (checked over 29 captures that it never changed a single border). The map repaints the new Ruins over ~20 frames instead of in one go.
+- **Huge attack rings**: late on a Large map one ring can be 1,000–2,000 tiles, all captured in one tick. A ring is now eaten a slice per tick across its 0.4 s (a quarter per tick), and all attacks together take at most 300 tiles per tick on a Medium map, scaled down by map area (~180 on Large). Only fronts over ~1,000 tiles take a bit longer than 0.4 s. DESIGN.md mentions this.
+- **Huge expansion rings** after a Crown falls (2,000 Ruins tiles in one ring): at most 300 tiles per ring and 400 per tick for everyone together; the rest is taken on the next rings.
+- **Bots thinking all at once**: at most 2 bot "thinks" per tick (the next bot goes next tick; the starting bot rotates so nobody always waits). Starting an attack walked the attacker's whole border with slow helper calls (7–9 ms on a Large empire); rewritten with inline maths, same result.
+- First match tick: the usable-land count is now worked out during map generation (was a full-map scan, 15 ms). Smaller savings in the attack loop (skip Crown and Wall lookups that can't match, Forts in a packed array). The map caches land colours and repaints at most 1,200 changed pixels per frame.
+- These change the timing of big fights a little, so I reran the balance check: **all 7 targets still pass** (below).
+
+**Android**
+- `export_presets.cfg`: an "Android" preset: app label **Crown Conquest**, package `com.crownconquest.game`, 64-bit and 32-bit ARM, immersive full screen, vibration permission, debug-signed with the editor's debug keystore, output `export/CrownConquest.apk` (git-ignored). The Godot exporter reads it and only complains about the missing templates and SDK, which is what the setup guide installs.
+- Landscape: the project uses "sensor landscape" (landscape either way up, never portrait).
+- Placeholder icon: a gold crown on a blue tile (`assets/icon/`, made by `tools/make_placeholder_icon.py`): 512 px for the app, 192 px legacy launcher icon, and 432 px adaptive-icon foreground/background layers. Replace the PNGs with real art any time.
+- Keep the screen on: on during matches, off in the menus (`DisplayServer.screen_set_keep_on`).
+- The project's name is now "Crown Conquest". On Windows, settings and saves now live in `%APPDATA%\CrownConquest` (your PC test progress starts fresh once; phones aren't affected).
+- **`docs/ANDROID_SETUP.md`**: beginner, step-by-step for Windows: Java 17, Android Studio's SDK, Godot's export templates, Editor Settings paths, making a debug keystore if needed, developer mode + USB debugging, one-click deploy or an .apk + `adb install`, the command-line export, and a troubleshooting table.
+- README rewritten (it was UTF-16 with only a title) with links and the tool commands.
+- New smoke suite `android` (14 checks: settings, preset, icons, keep-screen-on, ring slicing, Ruins repaint, tick time on a busy Large match). All 323 smoke checks and 13 flow checks pass.
+
+**Final balance check after the performance work** (`reports/balance_2026-10-06_final.md`, 100 matches + 100 Hard checks): median 7:44, Turtle 31% (Expander 26, Raider 24, Opportunist 19), leader at 3:00 wins 47%, 15:00 endings 3%, 5.9 Crowns per match, least-used item Port 37%, Hard beats 7 Easy 57%. All pass.
+
+**What to test**
+- Follow `docs/ANDROID_SETUP.md` and install on your phone. Check: it opens in landscape, the name and icon are right, the screen doesn't dim during a match but does in the menus, vibration works.
+- Play a Large map with 11 bots on the phone and watch the busiest moments (several Crowns falling, big pushes after 10:00): does it stay smooth? If not, tell me the phone model and when it stuttered.
+- When a Crown falls, the Ruins colour should sweep across the map in about a third of a second.

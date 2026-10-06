@@ -89,7 +89,9 @@ func _stalled_attack(t: SmokeTest) -> void:
 	atk.advance_timer = 0.01
 	st.attacks.append(atk)
 	var before: float = a_p.troops
-	CombatOps.tick_attacks(sim)
+	# A ring is spread over the ticks of one ring interval; run one full ring.
+	for k in range(CombatOps.ring_ticks()):
+		CombatOps.tick_attacks(sim)
 	t.check(not st.attacks.has(atk), "a stalled attack ends instead of blocking a slot forever")
 	t.check(is_equal_approx(a_p.troops - before, 7.5), "...and 75%% of what's left comes back (+%.1f)" % (a_p.troops - before))
 

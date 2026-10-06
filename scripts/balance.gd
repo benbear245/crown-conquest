@@ -51,6 +51,12 @@ const TROOP_BAR_SWEET_HIGH: float = 0.65
 const CLAIM_COST_BASE: float = 2.0            # troops per tile x terrain claim cost
 const RUINS_CLAIM_MULT: float = 0.5
 const EXPANSION_RING_INTERVAL_SEC: float = 0.3
+# One expansion ring claims at most this many tiles (a huge Ruins frontier is
+# taken over a few rings instead of all in one tick).
+const EXPANSION_MAX_TILES_PER_RING: int = 300
+# All expansions together claim at most this many tiles per tick; a player
+# whose ring doesn't fit expands on the next tick instead.
+const EXPANSION_TILES_PER_TICK_BUDGET: int = 400
 const SEND_MIN_FRACTION: float = 0.10
 const SEND_MAX_FRACTION: float = 1.00
 
@@ -60,6 +66,14 @@ const ATTACK_TILE_COST_SCALE: float = 1.5     # multiplied by defender D x defen
 const DEFENDER_LOSS_PER_TILE: float = 0.5     # defender loses 0.5 x D per lost tile
 const MAX_SIMULTANEOUS_ATTACKS: int = 3
 const ATTACK_RING_INTERVAL_SEC: float = 0.4
+# A ring is spread over the ticks of one interval; at most this many tiles per
+# attack per tick (only giant late-game fronts, over 1,200 tiles, take longer).
+const ATTACK_RING_MAX_TILES_PER_TICK: int = 300
+# All attacks together take at most this many tiles per tick on a Medium map,
+# scaled by map area (Large maps have more players and work per tick: ~180);
+# an attack that runs out of budget carries on next tick. Keeps each tick
+# under 10 ms in the biggest wars.
+const ATTACK_TILES_PER_TICK_BUDGET: int = 300
 const RETREAT_RETURN_FRACTION: float = 0.75
 const BUILDING_DEFENSE_CAP: float = 3.5       # Fort x Wall x CrownZone, capped (not Crown tiles)
 const PEACE_PERIOD_SEC: float = 60.0
@@ -232,6 +246,10 @@ const OPPORTUNIST_BREAK_DELAY_MAX_SEC: float = 70.0
 # their troops (instead of trading small attacks until 15:00).
 const BOT_SIEGE_ATTACK_THRESHOLD: float = 0.50
 const BOT_SIEGE_SEND_MIN: float = 0.70
+
+# At most this many bots think in one tick (each think scans the map around
+# the bot); the rest wait a tick. Keeps a Large 12-player match smooth.
+const BOT_MAX_THINKS_PER_TICK: int = 2
 
 const BOT_EASY_THINK_SEC: float = 2.5
 const BOT_EASY_SEND_MIN: float = 0.20

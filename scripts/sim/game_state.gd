@@ -21,6 +21,9 @@ const RUINS_OWNER_ID: int = 255
 var dirty_tiles: Dictionary = {}
 # Headless runs (balance simulator) have no renderer to clear dirty_tiles.
 var track_dirty: bool = true
+# Set when a large area changed at once (a Crown fell): the Map repaints the
+# whole image over the next few frames instead of tile by tile.
+var repaint_all: bool = false
 
 var tick_count: int = 0
 var match_seed: int = 0
@@ -67,6 +70,8 @@ var winner_team: int = -1
 var win_reason: String = ""
 # Map type actually generated (Random resolved to Continent/Archipelago/Highlands).
 var resolved_map_type: int = 0
+# Bot "thinks" still allowed this tick (see Bots.tick; spreads bursts).
+var bot_thinks_left: int = 0
 # Teams mode: players have a team and an ally (see Player.team / ally_id).
 var teams_mode: bool = false
 # Tutorial: no placement countdown, no Final Siege, no 15:00 limit and no
@@ -119,6 +124,7 @@ func configure(w: int, h: int, new_seed: int) -> void:
 	owners.resize(w * h)
 	players = []
 	dirty_tiles.clear()
+	repaint_all = false
 	crown_tiles.clear()
 	crown_centres.clear()
 	attacks = []
@@ -183,9 +189,14 @@ func set_owner_idx(i: int, owner_id: int) -> void:
 func finalize_terrain() -> void:
 	blocked = PackedByteArray()
 	blocked.resize(terrain.size())
+	var usable: int = 0
 	for i in range(terrain.size()):
-		blocked[i] = 1 if is_blocked_terrain(terrain[i]) else 0
-	_usable_tiles = -1
+		var b: int = 1 if is_blocked_terrain(terrain[i]) else 0
+		blocked[i] = b
+		usable += 1 - b
+	# Counted here, during map generation, so the first match tick doesn't
+	# pay for a full-map scan.
+	_usable_tiles = usable
 
 
 func get_terrain_at(x: int, y: int) -> int:

@@ -3,6 +3,11 @@ extends Node2D
 
 # The Map node only draws. It never mutates game state.
 # World coords are 1:1 with tiles; the Camera2D handles screen fitting.
+# At most MAX_PIXELS_PER_FRAME changed tiles are repainted per frame, so a
+# Crown falling (thousands of tiles turning to Ruins at once) is spread over a
+# few frames instead of causing a hitch.
+
+const MAX_PIXELS_PER_FRAME: int = 1200
 
 var _image: Image
 var _texture: ImageTexture
@@ -12,6 +17,10 @@ var _painted_colorblind: bool = false
 # Your territory pattern (Customize; 0 = none) and whose land gets it.
 var pattern: int = 0
 var pattern_owner: int = 1
+# Plain owned-land colour per (owner, terrain), rebuilt on every full repaint.
+var _land_colors: Dictionary = {}
+# Progressive full repaint (after a Crown falls): next row to repaint, -1 = idle.
+var _sweep_row: int = -1
 
 
 func setup(state: GameState) -> void:
@@ -28,14 +37,53 @@ func setup(state: GameState) -> void:
 func render() -> void:
 	if _state == null or _texture == null:
 		return
-	if _state.dirty_tiles.is_empty():
+	if _state.repaint_all:
+		_state.repaint_all = false
+		_sweep_row = 0
+	var swept: int = _sweep_step()
+	var dirty: Dictionary = _state.dirty_tiles
+	if dirty.is_empty():
+		if swept > 0:
+			_texture.update(_image)
+			queue_redraw()
 		return
-	for i: int in _state.dirty_tiles.keys():
-		var p := _state.idx_to_xy(i)
-		_image.set_pixel(p.x, p.y, _color_for_tile(i))
-	_state.dirty_tiles.clear()
+	var w: int = _state.width
+	# The sweep and single-tile updates share one per-frame pixel budget.
+	var allowed: int = maxi(200, MAX_PIXELS_PER_FRAME - swept)
+	if dirty.size() <= allowed:
+		for i: int in dirty.keys():
+			@warning_ignore("integer_division")
+			_image.set_pixel(i % w, i / w, _color_for_tile(i))
+		dirty.clear()
+	else:
+		var n: int = 0
+		for i: int in dirty.keys():
+			@warning_ignore("integer_division")
+			_image.set_pixel(i % w, i / w, _color_for_tile(i))
+			dirty.erase(i)
+			n += 1
+			if n >= allowed:
+				break
 	_texture.update(_image)
 	queue_redraw()
+
+
+# Repaints the next band of rows of a full repaint (MAX_PIXELS_PER_FRAME
+# pixels' worth). Returns how many pixels it painted.
+func _sweep_step() -> int:
+	if _sweep_row < 0:
+		return 0
+	var w: int = _state.width
+	@warning_ignore("integer_division")
+	var rows: int = maxi(1, MAX_PIXELS_PER_FRAME / w)
+	var end_row: int = mini(_state.height, _sweep_row + rows)
+	for y in range(_sweep_row, end_row):
+		var row: int = y * w
+		for x in range(w):
+			_image.set_pixel(x, y, _color_for_tile(row + x))
+	var painted: int = (end_row - _sweep_row) * w
+	_sweep_row = end_row if end_row < _state.height else -1
+	return painted
 
 
 # Whether the image was last painted with the colour-blind palette.
@@ -64,6 +112,8 @@ func world_size() -> Vector2:
 
 func _paint_all() -> void:
 	_painted_colorblind = Settings.colorblind
+	_land_colors.clear()
+	_sweep_row = -1
 	for i in range(_state.tile_count()):
 		var p := _state.idx_to_xy(i)
 		_image.set_pixel(p.x, p.y, _color_for_tile(i))
@@ -110,10 +160,14 @@ func _base_color_for_tile(i: int) -> Color:
 			return _building_color(b, owner_id)
 	if owner_id == 0:
 		return terrain_color
-	if owner_id == GameState.RUINS_OWNER_ID:
-		return Balance.RUINS_COLOR.lerp(terrain_color, Palette.owner_tint())
-	var owner_color := Palette.player(owner_id)
-	var c: Color = owner_color.lerp(terrain_color, Palette.owner_tint())
+	var key: int = owner_id * 8 + t
+	var c: Color
+	if _land_colors.has(key):
+		c = _land_colors[key]
+	else:
+		var base: Color = Balance.RUINS_COLOR if owner_id == GameState.RUINS_OWNER_ID else Palette.player(owner_id)
+		c = base.lerp(terrain_color, Palette.owner_tint())
+		_land_colors[key] = c
 	if pattern != 0 and owner_id == pattern_owner:
 		var shade: float = Progression.pattern_shade(pattern, i % _state.width, int(i / float(_state.width)))
 		if shade > 0.0:

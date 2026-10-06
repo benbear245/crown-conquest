@@ -25,6 +25,16 @@ var front: Dictionary = {}
 # Seconds remaining until the next ring advance.
 var advance_timer: float = 0.0
 
+# The ring being eaten right now. A ring is spread over the ticks of one ring
+# interval (a quarter per tick at 0.4 s) so a huge front never lands in a
+# single tick: ring_queue is the front as it was when the ring started,
+# ring_pos how far we got, ring_new_front the front the ring is building.
+var ring_active: bool = false
+var ring_queue: Array = []
+var ring_pos: int = 0
+var ring_chunk: int = 0
+var ring_new_front: Dictionary = {}
+
 # Cached "does the front touch the defender's Crown zone?" for Crown alerts.
 # Invalidate (zone_cache_valid = false) whenever `front` changes.
 var zone_cache_valid: bool = false

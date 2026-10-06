@@ -158,8 +158,14 @@ func _tick_placement() -> void:
 	CrownsOps.tick_placement(self)
 
 
+# A few bots may think per tick; the starting player rotates so nobody is
+# always last in the queue. A bot that misses out thinks next tick.
 func _tick_bots() -> void:
-	for p: Player in state.players:
+	state.bot_thinks_left = Balance.BOT_MAX_THINKS_PER_TICK
+	var n: int = state.players.size()
+	var start: int = state.tick_count % maxi(n, 1)
+	for k in range(n):
+		var p: Player = state.players[(start + k) % n]
 		if p.is_alive and p.is_bot:
 			Bots.tick(self, p)
 

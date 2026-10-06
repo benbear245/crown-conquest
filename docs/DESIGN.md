@@ -60,6 +60,7 @@ The last part of the growth formula is "interest": it's biggest at half the cap 
 
 - Tap enemy land to send troops at that player. You can run up to 3 attacks at once.
 - The attack eats one ring of their border tiles every 0.4 seconds, starting from where your lands touch.
+- Very wide fronts are eaten a slice at a time so the game stays smooth on phones: all attacks together take at most 300 tiles per tick on a Medium map (about 180 on Large), so a ring of more than about 1,000 tiles takes a little longer than 0.4 seconds.
 - No attacks are allowed during the first 60 seconds of a match.
 - Tap an active attack's icon to retreat. 75% of what's left comes back.
 

@@ -10,6 +10,7 @@ var current: String = ""
 
 
 func _ready() -> void:
+	DisplayServer.screen_set_keep_on(false)   # matches turn it on (game.gd)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := TextureRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
