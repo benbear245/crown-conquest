@@ -31,6 +31,11 @@ var crown_tiles: Dictionary = {}
 # player_id -> tile idx of the Crown centre (the life tile).
 var crown_centres: Dictionary = {}
 
+# Active attacks (all players). Simulation ticks and consumes these.
+var attacks: Array = []
+# Recently captured tile idx -> absolute match_time when flash expires.
+var flash_tiles: Dictionary = {}
+
 
 func configure(w: int, h: int, match_seed: int) -> void:
 	width = w
@@ -45,6 +50,8 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	dirty_tiles.clear()
 	crown_tiles.clear()
 	crown_centres.clear()
+	attacks = []
+	flash_tiles.clear()
 	tick_count = 0
 	phase = Balance.PHASE_PLACEMENT
 	placement_time_left = Balance.PLACEMENT_PHASE_SEC

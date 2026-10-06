@@ -63,8 +63,95 @@ func advance_tick() -> void:
 			state.match_time += Balance.TICK_DELTA
 			_apply_growth()
 			_apply_expansions()
+			_tick_attacks()
+			_tick_flashes()
 			_tick_bots()
 	state.tick_count += 1
+
+
+func _tick_flashes() -> void:
+	if state.flash_tiles.is_empty():
+		return
+	var expired: Array = []
+	for i: int in state.flash_tiles.keys():
+		if state.match_time >= state.flash_tiles[i]:
+			expired.append(i)
+	for i: int in expired:
+		state.flash_tiles.erase(i)
+		state.dirty_tiles[i] = true
+
+
+func _tick_attacks() -> void:
+	var i := 0
+	while i < state.attacks.size():
+		var a: Attack = state.attacks[i]
+		if a.troops_remaining <= 0.0:
+			state.attacks.remove_at(i)
+			continue
+		a.advance_timer -= Balance.TICK_DELTA
+		if a.advance_timer > 0.0:
+			i += 1
+			continue
+		a.advance_timer += Balance.ATTACK_RING_INTERVAL_SEC
+		_advance_attack(a)
+		if a.troops_remaining <= 0.0 or a.front.is_empty():
+			state.attacks.remove_at(i)
+			continue
+		i += 1
+
+
+func _advance_attack(a: Attack) -> void:
+	var defender: Player = state.get_player(a.defender_id)
+	if defender == null or not defender.is_alive or defender.land <= 0:
+		a.troops_remaining = 0.0
+		return
+	var d_ratio: float = defender.troops / float(defender.land)
+	var new_front: Dictionary = {}
+	for ni: int in a.front.keys():
+		var cur_owner: int = state.owners[ni]
+		if cur_owner != a.defender_id:
+			continue  # tile moved out of defender's hands already
+		if state.is_blocked_terrain(state.terrain[ni]):
+			continue
+		var cost: float = _attack_tile_cost(ni, d_ratio)
+		if a.troops_remaining < cost:
+			new_front[ni] = true   # keep for next ring if we survive
+			continue
+		a.troops_remaining -= cost
+		defender.troops = maxf(0.0, defender.troops - Balance.DEFENDER_LOSS_PER_TILE * d_ratio)
+		var pos: Vector2i = state.idx_to_xy(ni)
+		_claim_tile(a.attacker_id, pos.x, pos.y)
+		_mark_flash(ni)
+		for off in NEIGHBOR_OFFSETS:
+			var nx: int = pos.x + off.x
+			var ny: int = pos.y + off.y
+			if not state.in_bounds(nx, ny):
+				continue
+			var nni: int = state.idx(nx, ny)
+			if state.owners[nni] == a.defender_id:
+				new_front[nni] = true
+	a.front = new_front
+
+
+func _attack_tile_cost(tile_idx: int, d_ratio: float) -> float:
+	var t: int = state.terrain[tile_idx]
+	var terrain_def: float = 1.0
+	if t >= 0 and t < Balance.TERRAIN_DEFENSE.size():
+		terrain_def = Balance.TERRAIN_DEFENSE[t]
+	var extra_def: float = combined_defense_at(tile_idx)
+	return Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_def * extra_def
+
+
+# Non-terrain defense: Crown tile and zone (Prompt 6) and Fort / Wall (Prompt 8)
+# live here so the attack cost function stays stable. Capped by BUILDING_DEFENSE_CAP
+# everywhere except Crown tiles themselves.
+func combined_defense_at(_tile_idx: int) -> float:
+	return 1.0
+
+
+func _mark_flash(tile_idx: int) -> void:
+	state.flash_tiles[tile_idx] = state.match_time + 0.3
+	state.dirty_tiles[tile_idx] = true
 
 
 func _tick_placement() -> void:
@@ -146,7 +233,6 @@ func player_expand(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 	var target_owner: int = state.owners[state.idx(tx, ty)]
 	if target_owner == player_id:
 		return false
-	# Prompt 4: still expansion-only; attacks land in Prompt 5.
 	if target_owner != 0 and target_owner != GameState.RUINS_OWNER_ID:
 		return false
 	if state.is_blocked_terrain(state.terrain[state.idx(tx, ty)]):
@@ -162,6 +248,97 @@ func player_expand(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 	if p.expansion_timer <= 0.0:
 		p.expansion_timer = Balance.EXPANSION_RING_INTERVAL_SEC
 	return true
+
+
+# Target tile must be owned by another live player and touch the attacker's border.
+# Up to Balance.MAX_SIMULTANEOUS_ATTACKS active attacks per player.
+func player_attack(player_id: int, tx: int, ty: int, fraction: float) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	if state.match_time < Balance.PEACE_PERIOD_SEC:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	if not state.in_bounds(tx, ty):
+		return false
+	var target_owner: int = state.owners[state.idx(tx, ty)]
+	if target_owner == 0 or target_owner == GameState.RUINS_OWNER_ID or target_owner == player_id:
+		return false
+	var defender: Player = state.get_player(target_owner)
+	if defender == null or not defender.is_alive:
+		return false
+	if active_attack_count(player_id) >= Balance.MAX_SIMULTANEOUS_ATTACKS:
+		return false
+	var front: Dictionary = _build_attack_front(player_id, target_owner)
+	if front.is_empty():
+		return false
+	var frac: float = clampf(fraction, Balance.SEND_MIN_FRACTION, Balance.SEND_MAX_FRACTION)
+	var send: float = floorf(p.troops * frac)
+	if send <= 0.0:
+		return false
+	p.troops -= send
+	var atk := Attack.new()
+	atk.attacker_id = player_id
+	atk.defender_id = target_owner
+	atk.troops_remaining = send
+	atk.front = front
+	atk.advance_timer = Balance.ATTACK_RING_INTERVAL_SEC
+	state.attacks.append(atk)
+	return true
+
+
+func player_retreat(player_id: int, local_index: int) -> bool:
+	var seen := 0
+	for i in range(state.attacks.size()):
+		var a: Attack = state.attacks[i]
+		if a.attacker_id != player_id:
+			continue
+		if seen == local_index:
+			var p: Player = state.get_player(player_id)
+			if p != null:
+				p.troops += a.troops_remaining * Balance.RETREAT_RETURN_FRACTION
+			state.attacks.remove_at(i)
+			return true
+		seen += 1
+	return false
+
+
+func active_attack_count(player_id: int) -> int:
+	var n := 0
+	for a: Attack in state.attacks:
+		if a.attacker_id == player_id:
+			n += 1
+	return n
+
+
+func attacks_by(player_id: int) -> Array:
+	var out: Array = []
+	for a: Attack in state.attacks:
+		if a.attacker_id == player_id:
+			out.append(a)
+	return out
+
+
+func _build_attack_front(attacker_id: int, defender_id: int) -> Dictionary:
+	var out: Dictionary = {}
+	var attacker: Player = state.get_player(attacker_id)
+	if attacker == null:
+		return out
+	for i: int in attacker.border.keys():
+		var pos := state.idx_to_xy(i)
+		for off in NEIGHBOR_OFFSETS:
+			var nx: int = pos.x + off.x
+			var ny: int = pos.y + off.y
+			if not state.in_bounds(nx, ny):
+				continue
+			var ni := state.idx(nx, ny)
+			if state.owners[ni] != defender_id:
+				continue
+			if state.is_blocked_terrain(state.terrain[ni]):
+				continue
+			out[ni] = true
+	return out
 
 
 # --- Crown placement --------------------------------------------------------

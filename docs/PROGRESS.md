@@ -85,3 +85,27 @@
 - The leaderboard on the right updates every frame; biggest player at the top. Early on, everyone has ~49 land tiles.
 - Bot land areas grow outward over time; nothing attacks yet (Prompt 5).
 - Tapping "New map" starts a fresh placement phase on a new seed.
+
+## Prompt 5: Combat
+
+**Built**
+- `Attack` (`scripts/sim/attack.gd`): attacker_id, defender_id, troops_remaining, a defender-tile front, and an advance timer. The attacker has already paid the troops_remaining when the attack is created.
+- `Simulation.player_attack(player_id, tx, ty, fraction)`: enforces peace period, requires enemy ownership and a touching border, caps per-player active attacks at `Balance.MAX_SIMULTANEOUS_ATTACKS` (3), builds the initial front from attacker-border tiles' defender neighbours, moves the troops out of the attacker's pool, and queues an `Attack`.
+- `Simulation._tick_attacks` advances every active attack: timer counts down, each `Balance.ATTACK_RING_INTERVAL_SEC` (0.4 s) a ring of defender tiles is captured. Each tile costs `2 + 1.5 · D · terrain_defense · combined_defense`, where `D = defender.troops / defender.land` (snapshot at ring start). The defender loses `0.5 · D` troops per lost tile. The attack ends when troops run out or the front is empty.
+- `combined_defense_at(tile_idx)` is a single function returning 1.0 for now; Crown + Fort / Wall land in Prompts 6 and 8.
+- `Simulation.player_retreat(player_id, local_index)` refunds `RETREAT_RETURN_FRACTION` (75 %) of what is still in the attack and removes it.
+- Border flash: `_mark_flash(tile_idx)` writes an expiry into `state.flash_tiles` whenever an attack captures a tile. `_tick_flashes` erases expired entries and marks them dirty so the Map repaints back to normal. `Map._color_for_tile` lerps toward white while a tile is flashing — a visible pulse along a defender's edge wherever a fight is active.
+- `Simulation.active_attack_count` / `attacks_by` let the HUD show the local player's running attacks.
+- Over-cap shrink after losing land already landed in Prompt 2; attacks pushing a defender under their new cap go through `_apply_growth`'s shrink branch next tick automatically.
+- Bots now attack: `Bots._basic_expand` tries `_try_tap_free` first; if no free land touches their border, after the peace period expires they call `_try_attack_weakest` which picks the neighbouring player with the lowest `troops/land` and queues an attack through `Simulation.player_attack` (same path as a human tap).
+- HUD attack list on the bottom-left: up to 3 rows, each a button labelled `⚔ Defender  N` showing the troops left in that attack. Tapping the row retreats and refunds 75 %.
+- `game.gd` tap routing: during a match, taps on enemy land call `player_attack`; taps on free land still call `player_expand`.
+
+**What to check**
+- After the 10 s placement and 60 s peace, tap enemy land that touches your border. An attack appears in the bottom-left list and the border between you and that player starts eating defender tiles every 0.4 s. The attack's troop readout drops as it pays per tile.
+- Open 3 attacks and verify a 4th tap on enemy land is ignored.
+- Tap one of the attack rows while it's running — 75 % of its remaining troops come back to your pool.
+- Captured tiles briefly flash lighter before settling into the attacker's colour.
+- Bots start attacking once free land near them runs out (usually around the 1:30–3:00 mark); you'll see borders eating into each other across the map.
+- During peace (first minute after placement), attempting to attack is a no-op; the attack list stays empty.
+- Over-cap shrink is visible when a player loses a lot of land fast: their troop bar drops toward the new cap.

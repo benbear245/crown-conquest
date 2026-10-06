@@ -27,7 +27,7 @@ func _ready() -> void:
 	_simulation = Simulation.new()
 	_simulation.start_default_match(_random_seed())
 	_map.setup(_simulation.state)
-	_hud.setup(_simulation.state)
+	_hud.setup(_simulation)
 	_hud.new_map_pressed.connect(_on_new_map_pressed)
 	_init_camera()
 
@@ -117,7 +117,12 @@ func _try_tap(screen_pos: Vector2) -> void:
 		Balance.PHASE_PLACEMENT:
 			_simulation.player_place_crown(local_id, tile.x, tile.y)
 		Balance.PHASE_MATCH:
-			_simulation.player_expand(local_id, tile.x, tile.y, _hud.send_fraction())
+			var target_owner: int = _simulation.state.owners[_simulation.state.idx(tile.x, tile.y)]
+			var frac: float = _hud.send_fraction()
+			if target_owner == 0 or target_owner == GameState.RUINS_OWNER_ID:
+				_simulation.player_expand(local_id, tile.x, tile.y, frac)
+			elif target_owner != local_id:
+				_simulation.player_attack(local_id, tile.x, tile.y, frac)
 
 
 func _screen_to_tile(screen_pos: Vector2) -> Vector2i:

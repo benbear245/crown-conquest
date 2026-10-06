@@ -17,6 +17,7 @@ const LEADERBOARD_WIDTH: int = 260
 
 signal new_map_pressed
 
+var _sim: Simulation
 var _state: GameState
 var _send_fraction: float = 0.50
 
@@ -32,18 +33,21 @@ var _new_map_button: Button
 var _placement_msg: Label
 var _leaderboard: VBoxContainer
 var _leader_rows: Array = []
+var _attack_rows: Array = []
 
 
 func _ready() -> void:
 	layer = 10
 	_build_top()
 	_build_leaderboard()
+	_build_attacks()
 	_build_placement_message()
 	_build_bottom()
 
 
-func setup(state: GameState) -> void:
-	_state = state
+func setup(sim: Simulation) -> void:
+	_sim = sim
+	_state = sim.state
 	update_from_state()
 
 
@@ -172,6 +176,40 @@ func _build_leaderboard() -> void:
 		_leader_rows.append({"row": row_box, "swatch": swatch, "name": name_label, "land": land_label})
 
 
+func _build_attacks() -> void:
+	var panel := PanelContainer.new()
+	panel.anchor_left = 0.0
+	panel.anchor_right = 0.0
+	panel.anchor_top = 1.0
+	panel.anchor_bottom = 1.0
+	panel.offset_left = MARGIN
+	panel.offset_right = MARGIN + 280
+	panel.offset_bottom = -(Balance.MIN_BUTTON_PX + 48)
+	panel.offset_top = panel.offset_bottom - (Balance.MAX_SIMULTANEOUS_ATTACKS * 38 + 20)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	panel.add_child(vbox)
+
+	var header := Label.new()
+	header.text = "Attacks (tap to retreat 75%)"
+	_apply_label_style(header)
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(header)
+
+	for i in range(Balance.MAX_SIMULTANEOUS_ATTACKS):
+		var btn := Button.new()
+		btn.text = ""
+		btn.custom_minimum_size = Vector2(260, 34)
+		btn.visible = false
+		var local_i: int = i
+		btn.pressed.connect(func() -> void: _on_attack_pressed(local_i))
+		vbox.add_child(btn)
+		_attack_rows.append(btn)
+
+
 func _build_placement_message() -> void:
 	_placement_msg = Label.new()
 	_placement_msg.set_anchors_preset(Control.PRESET_CENTER)
@@ -255,6 +293,31 @@ func update_from_state() -> void:
 	_update_local(_local_player())
 	_update_phase_display()
 	_update_leaderboard()
+	_update_attacks()
+
+
+func _update_attacks() -> void:
+	if _sim == null:
+		return
+	var attacks: Array = _sim.attacks_by(_sim.local_player_id)
+	for i in range(_attack_rows.size()):
+		var btn: Button = _attack_rows[i]
+		if i < attacks.size():
+			var a: Attack = attacks[i]
+			var defender: Player = _state.get_player(a.defender_id)
+			var defender_name: String = "???"
+			if defender != null:
+				defender_name = defender.display_name
+			btn.visible = true
+			btn.text = "⚔ %s  %d" % [defender_name, int(a.troops_remaining)]
+		else:
+			btn.visible = false
+
+
+func _on_attack_pressed(idx: int) -> void:
+	if _sim == null:
+		return
+	_sim.player_retreat(_sim.local_player_id, idx)
 
 
 func _local_player() -> Player:

@@ -39,9 +39,16 @@ static func _send_range(difficulty: int) -> Vector2:
 static func _basic_expand(sim: Simulation, player: Player) -> void:
 	if player.border.is_empty() or player.troops < 1.0:
 		return
+	if _try_tap_free(sim, player):
+		return
+	# No free tiles touch the border; try attacking the weakest neighbour.
+	if sim.state.match_time >= Balance.PEACE_PERIOD_SEC:
+		_try_attack_weakest(sim, player)
+
+
+static func _try_tap_free(sim: Simulation, player: Player) -> bool:
 	var state: GameState = sim.state
 	var border_keys: Array = player.border.keys()
-	# Try a handful of border tiles, pick the first one that touches a tappable free tile.
 	for _attempt in range(16):
 		var i: int = border_keys[state.rng.randi_range(0, border_keys.size() - 1)]
 		var pos := state.idx_to_xy(i)
@@ -58,5 +65,46 @@ static func _basic_expand(sim: Simulation, player: Player) -> void:
 				continue
 			var range_v := _send_range(player.difficulty)
 			var frac := state.rng.randf_range(range_v.x, range_v.y)
-			sim.player_expand(player.id, nx, ny, frac)
-			return
+			if sim.player_expand(player.id, nx, ny, frac):
+				return true
+	return false
+
+
+static func _try_attack_weakest(sim: Simulation, player: Player) -> void:
+	if sim.active_attack_count(player.id) >= Balance.MAX_SIMULTANEOUS_ATTACKS:
+		return
+	var state: GameState = sim.state
+	var neighbour_tile: Dictionary = {}       # defender_id -> example enemy tile idx
+	for i: int in player.border.keys():
+		var pos := state.idx_to_xy(i)
+		for off in Simulation.NEIGHBOR_OFFSETS:
+			var nx: int = pos.x + off.x
+			var ny: int = pos.y + off.y
+			if not state.in_bounds(nx, ny):
+				continue
+			var ni := state.idx(nx, ny)
+			var ow: int = state.owners[ni]
+			if ow == 0 or ow == GameState.RUINS_OWNER_ID or ow == player.id:
+				continue
+			neighbour_tile[ow] = ni
+	if neighbour_tile.is_empty():
+		return
+	var best_id: int = -1
+	var best_d: float = INF
+	var best_tile: int = -1
+	for ow_v in neighbour_tile.keys():
+		var ow: int = ow_v
+		var def: Player = state.get_player(ow)
+		if def == null or not def.is_alive or def.land <= 0:
+			continue
+		var d: float = def.troops / float(def.land)
+		if d < best_d:
+			best_d = d
+			best_id = ow
+			best_tile = neighbour_tile[ow_v]
+	if best_id < 0:
+		return
+	var pos: Vector2i = state.idx_to_xy(best_tile)
+	var range_v := _send_range(player.difficulty)
+	var frac := state.rng.randf_range(range_v.x, range_v.y)
+	sim.player_attack(player.id, pos.x, pos.y, frac)

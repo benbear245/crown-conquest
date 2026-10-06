@@ -47,16 +47,24 @@ func _paint_all() -> void:
 
 
 func _color_for_tile(i: int) -> Color:
+	var base := _base_color_for_tile(i)
+	if _state.flash_tiles.has(i) and _state.match_time < _state.flash_tiles[i]:
+		return base.lerp(Color(1, 1, 1), 0.55)
+	return base
+
+
+func _base_color_for_tile(i: int) -> Color:
 	var t: int = _state.terrain[i]
 	var owner_id: int = _state.owners[i]
 	var terrain_color := _terrain_color(t)
-	# Crown tiles overlay regardless of owner, so they're always visible.
+	# Crown tiles overlay only while the Crown's rightful owner still holds the tile.
 	if _state.crown_tiles.has(i):
 		var crown_owner: int = _state.crown_tiles[i]
-		var centre: int = _state.crown_centres.get(crown_owner, -1)
-		if i == centre:
-			return Color(0.98, 0.86, 0.22)
-		return Balance.color_for_player(crown_owner).lightened(0.35)
+		if owner_id == crown_owner:
+			var centre: int = _state.crown_centres.get(crown_owner, -1)
+			if i == centre:
+				return Color(0.98, 0.86, 0.22)
+			return Balance.color_for_player(crown_owner).lightened(0.35)
 	if owner_id == 0:
 		return terrain_color
 	if owner_id == GameState.RUINS_OWNER_ID:
