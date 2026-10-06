@@ -26,6 +26,7 @@ signal buy_keep_requested(level: int)
 signal wall_mode_toggled(enabled: bool)
 signal boat_launch_requested(port_x: int, port_y: int)
 signal ability_pressed(ability_id: int)
+signal offer_truce_requested(target_id: int)
 
 var _sim: Simulation
 var _state: GameState
@@ -77,6 +78,17 @@ var _ability_buttons: Array = []
 var _bombard_target_mode: bool = false
 var _bombard_hint_label: Label
 
+# Enemy info panel (long-press enemy land).
+var _enemy_panel: PanelContainer
+var _enemy_vbox: VBoxContainer
+var _enemy_name_label: Label
+var _enemy_stats_label: Label
+var _enemy_offer_btn: Button
+var _enemy_close_btn: Button
+var _enemy_target_id: int = -1
+# Modifier icons next to the troop bar.
+var _modifier_label: Label
+
 
 func _ready() -> void:
 	layer = 10
@@ -90,6 +102,8 @@ func _ready() -> void:
 	_build_build_menu()
 	_build_keep_panel()
 	_build_ability_bar()
+	_build_enemy_panel()
+	_build_modifier_label()
 
 
 func setup(sim: Simulation) -> void:
@@ -458,6 +472,7 @@ func update_from_state() -> void:
 	_update_announcement()
 	_update_end_overlay()
 	_update_ability_bar()
+	_update_modifier_label()
 
 
 func _update_alerts() -> void:
@@ -603,6 +618,8 @@ func _update_leaderboard() -> void:
 	alive.sort_custom(func(a: Player, b: Player) -> bool: return a.land > b.land)
 	var usable: int = _state.total_usable_tiles()
 	var denom: float = float(maxi(usable, 1))
+	var local: Player = _local_player()
+	var rising_id: int = _sim.rising_empire_id() if _sim != null else -1
 	for i in range(_leader_rows.size()):
 		var row: Dictionary = _leader_rows[i]
 		if i < alive.size():
@@ -613,9 +630,14 @@ func _update_leaderboard() -> void:
 			else:
 				row.swatch.color = Color(0.25, 0.25, 0.25)
 			var short_name: String = p.display_name
-			if short_name.length() > 16:
-				short_name = short_name.substr(0, 16)
-			row.name.text = short_name
+			if short_name.length() > 14:
+				short_name = short_name.substr(0, 14)
+			var markers: String = ""
+			if rising_id > 0 and p.id == rising_id:
+				markers += " ★"
+			if local != null and p.id != local.id and TrucesOps.has_truce(local, p.id, _state.match_time):
+				markers += " ⚑"
+			row.name.text = short_name + markers
 			row.land.text = "%.1f%%" % (100.0 * float(p.land) / denom)
 		else:
 			row.row.visible = false
@@ -1000,3 +1022,152 @@ func _update_ability_bar() -> void:
 			state_label = "ready"
 		btn.text = "%s\n%s" % [ABILITY_LABELS[i], state_label]
 		btn.disabled = (not unlocked) or (cd_until > now) or (cost > 0.0 and local.troops < cost)
+
+
+# --- Enemy info panel + truces -----------------------------------------------
+
+func _build_enemy_panel() -> void:
+	_enemy_panel = PanelContainer.new()
+	_enemy_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_enemy_panel.offset_left = -220
+	_enemy_panel.offset_right = 220
+	_enemy_panel.offset_top = -150
+	_enemy_panel.offset_bottom = 150
+	_enemy_panel.visible = false
+	add_child(_enemy_panel)
+
+	_enemy_vbox = VBoxContainer.new()
+	_enemy_vbox.add_theme_constant_override("separation", 8)
+	_enemy_panel.add_child(_enemy_vbox)
+
+	_enemy_name_label = Label.new()
+	_apply_label_style(_enemy_name_label)
+	_enemy_name_label.add_theme_font_size_override("font_size", 22)
+	_enemy_vbox.add_child(_enemy_name_label)
+
+	_enemy_stats_label = Label.new()
+	_apply_label_style(_enemy_stats_label)
+	_enemy_stats_label.add_theme_font_size_override("font_size", 16)
+	_enemy_vbox.add_child(_enemy_stats_label)
+
+	_enemy_offer_btn = Button.new()
+	_enemy_offer_btn.text = "Offer truce"
+	_enemy_offer_btn.custom_minimum_size = Vector2(360, Balance.MIN_BUTTON_PX)
+	_enemy_offer_btn.pressed.connect(_on_offer_truce_pressed)
+	_enemy_vbox.add_child(_enemy_offer_btn)
+
+	_enemy_close_btn = Button.new()
+	_enemy_close_btn.text = "Close"
+	_enemy_close_btn.custom_minimum_size = Vector2(360, 40)
+	_enemy_close_btn.pressed.connect(func() -> void: _enemy_panel.visible = false)
+	_enemy_vbox.add_child(_enemy_close_btn)
+
+
+func _build_modifier_label() -> void:
+	_modifier_label = Label.new()
+	_modifier_label.anchor_left = 0.0
+	_modifier_label.anchor_right = 0.0
+	_modifier_label.anchor_top = 0.0
+	_modifier_label.anchor_bottom = 0.0
+	_modifier_label.offset_left = MARGIN
+	_modifier_label.offset_top = MARGIN + BAR_HEIGHT + 20
+	_modifier_label.offset_right = MARGIN + 440
+	_modifier_label.offset_bottom = MARGIN + BAR_HEIGHT + 44
+	_apply_label_style(_modifier_label)
+	_modifier_label.add_theme_font_size_override("font_size", 14)
+	_modifier_label.text = ""
+	_modifier_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_modifier_label)
+
+
+func open_enemy_panel(target_id: int) -> void:
+	if _sim == null or _state == null:
+		return
+	var target: Player = _state.get_player(target_id)
+	if target == null or not target.is_alive or target.id == _sim.local_player_id:
+		return
+	_enemy_target_id = target_id
+	var personality_hint: String = _personality_label(target.personality)
+	_enemy_name_label.text = target.display_name
+	var usable: int = _state.total_usable_tiles()
+	var denom: float = float(maxi(usable, 1))
+	var land_pct: float = 100.0 * float(target.land) / denom
+	_enemy_stats_label.text = "%s   Land %.1f%%   Troops %d\nTruces: %d / %d   %s" % [
+		personality_hint, land_pct, int(target.troops),
+		TrucesOps.active_truce_count(target, _state.match_time), Balance.TRUCE_LIMIT,
+		("Oathbreaker" if TrucesOps.is_oathbreaker(target, _state.match_time) else ""),
+	]
+	var local: Player = _local_player()
+	var can_offer: bool = local != null and local.is_alive
+	if can_offer and TrucesOps.has_truce(local, target_id, _state.match_time):
+		_enemy_offer_btn.text = "Already in truce"
+		_enemy_offer_btn.disabled = true
+	elif can_offer and TrucesOps.active_truce_count(local, _state.match_time) >= Balance.TRUCE_LIMIT:
+		_enemy_offer_btn.text = "At truce limit (%d)" % Balance.TRUCE_LIMIT
+		_enemy_offer_btn.disabled = true
+	elif can_offer and target.refuses_all_truces:
+		_enemy_offer_btn.text = "Oathbreaker — will refuse"
+		_enemy_offer_btn.disabled = true
+	else:
+		_enemy_offer_btn.text = "Offer truce"
+		_enemy_offer_btn.disabled = false
+	_enemy_panel.visible = true
+
+
+func is_enemy_panel_open() -> bool:
+	return _enemy_panel != null and _enemy_panel.visible
+
+
+func close_enemy_panel() -> void:
+	if _enemy_panel != null:
+		_enemy_panel.visible = false
+
+
+func _on_offer_truce_pressed() -> void:
+	if _enemy_target_id < 0:
+		return
+	offer_truce_requested.emit(_enemy_target_id)
+	_enemy_panel.visible = false
+
+
+func _personality_label(p: int) -> String:
+	match p:
+		Balance.BOT_PERSONALITY_EXPANDER:
+			return "Expander — grabs land, thin defenses"
+		Balance.BOT_PERSONALITY_RAIDER:
+			return "Raider — hits weak borders, overextends"
+		Balance.BOT_PERSONALITY_TURTLE:
+			return "Turtle — Forts and Walls, slow growth"
+		Balance.BOT_PERSONALITY_OPPORTUNIST:
+			return "Opportunist — picks on the busy, may break truces"
+		_:
+			return ""
+
+
+func _update_modifier_label() -> void:
+	if _modifier_label == null:
+		return
+	var local: Player = _local_player()
+	if local == null:
+		_modifier_label.text = ""
+		return
+	var parts: Array[String] = []
+	if _sim != null and _sim.is_underdog(local):
+		parts.append("UNDERDOG +25%% growth / -25%% claim")
+	var usable: int = _state.total_usable_tiles()
+	if usable > 0:
+		var frac: float = float(local.land) / float(usable)
+		if frac >= Balance.EMPIRE_UPKEEP_LAND_THRESHOLD_2:
+			parts.append("EMPIRE UPKEEP -30%% growth")
+		elif frac >= Balance.EMPIRE_UPKEEP_LAND_THRESHOLD_1:
+			parts.append("EMPIRE UPKEEP -15%% growth")
+	if TrucesOps.is_oathbreaker(local, _state.match_time):
+		parts.append("OATHBREAKER +20%% attack cost")
+	var count: int = TrucesOps.active_truce_count(local, _state.match_time)
+	if count > 0:
+		parts.append("Truces: %d/%d" % [count, Balance.TRUCE_LIMIT])
+	if _sim != null and _sim.rising_empire_id() > 0 and _sim.rising_empire_id() != local.id:
+		var rp: Player = _state.get_player(_sim.rising_empire_id())
+		if rp != null:
+			parts.append("Rising Empire: %s (-15%% to attack)" % rp.display_name)
+	_modifier_label.text = "   ".join(parts)

@@ -20,6 +20,14 @@ var local_player_id: int = 1
 # balance sim can run many matches without paying for rendering state it won't use.
 var headless: bool = false
 var _final_siege_announced: bool = false
+# Cached average land of alive players for Underdog / Empire upkeep checks.
+# Refreshed once a second (10 ticks) rather than every tick, since the number
+# changes slowly compared to the hot path.
+var _avg_land_cache: float = 0.0
+var _avg_recompute_at: int = 0
+# Who the Rising Empire is (-1 if nobody owns > 30% of the map). Refreshed with
+# the avg cache. Used by _attack_tile_cost to discount attacks on them.
+var _rising_empire_id: int = -1
 
 
 # --- Match setup -------------------------------------------------------------
@@ -67,9 +75,11 @@ func advance_tick() -> void:
 		Balance.PHASE_MATCH:
 			state.match_time += Balance.TICK_DELTA
 			_announce_final_siege_once()
+			_recompute_avg_land_once_per_second()
 			_apply_growth()
 			_apply_expansions()
 			AbilitiesOps.tick(self)
+			TrucesOps.tick(self)
 			_tick_attacks()
 			_tick_boats()
 			if not headless:
@@ -182,11 +192,19 @@ func _attack_tile_cost(tile_idx: int, d_ratio: float, attacker_id: int = 0) -> f
 	if AbilitiesOps.tile_in_any_bombard(state, tile_idx):
 		extra_def *= Balance.BOMBARD_DEFENSE_MULT
 	var cost: float = Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_def * extra_def
-	# Rally reduces attack cost by 30% while active.
 	if attacker_id > 0:
 		var p: Player = state.get_player(attacker_id)
-		if p != null and AbilitiesOps.is_rally_active(p, state.match_time):
-			cost *= (1.0 - Balance.RALLY_ATTACK_DISCOUNT)
+		if p != null:
+			# Rally reduces attack cost by 30% while active.
+			if AbilitiesOps.is_rally_active(p, state.match_time):
+				cost *= (1.0 - Balance.RALLY_ATTACK_DISCOUNT)
+			# Oathbreaker: +20% cost for 45 s after breaking a truce.
+			if TrucesOps.is_oathbreaker(p, state.match_time):
+				cost *= (1.0 + Balance.OATHBREAKER_ATTACK_PENALTY)
+			# Rising Empire: everyone's attacks on the leader cost 15% less.
+			var owner: int = state.owners[tile_idx]
+			if _rising_empire_id > 0 and owner == _rising_empire_id and attacker_id != _rising_empire_id:
+				cost *= (1.0 - Balance.RISING_EMPIRE_ATTACK_DISCOUNT)
 	return cost
 
 
@@ -426,8 +444,54 @@ func _apply_growth() -> void:
 
 
 func _growth_multiplier(p: Player) -> float:
+	var mult: float = 1.0
 	var gem_bonus: float = minf(float(p.gem_tiles) * Balance.GEM_GROWTH_BONUS_PER_TILE, Balance.GEM_GROWTH_BONUS_MAX)
-	return 1.0 + gem_bonus
+	mult += gem_bonus
+	# Underdog: your land under 50% of the current alive average.
+	if _avg_land_cache > 0.0 and float(p.land) < Balance.UNDERDOG_LAND_FRACTION_OF_AVG * _avg_land_cache:
+		mult += Balance.UNDERDOG_GROWTH_BONUS
+	# Empire upkeep: tiered penalty for owning too much.
+	var usable: int = state.total_usable_tiles()
+	if usable > 0:
+		var frac: float = float(p.land) / float(usable)
+		if frac >= Balance.EMPIRE_UPKEEP_LAND_THRESHOLD_2:
+			mult += Balance.EMPIRE_UPKEEP_PENALTY_2
+		elif frac >= Balance.EMPIRE_UPKEEP_LAND_THRESHOLD_1:
+			mult += Balance.EMPIRE_UPKEEP_PENALTY_1
+	return maxf(mult, 0.1)
+
+
+func _recompute_avg_land_once_per_second() -> void:
+	if state.tick_count < _avg_recompute_at:
+		return
+	_avg_recompute_at = state.tick_count + Balance.TICKS_PER_SECOND
+	var alive_land: int = 0
+	var alive_count: int = 0
+	var usable: int = state.total_usable_tiles()
+	_rising_empire_id = -1
+	var biggest_land: int = -1
+	for p: Player in state.players:
+		if not p.is_alive:
+			continue
+		alive_land += p.land
+		alive_count += 1
+		if p.land > biggest_land:
+			biggest_land = p.land
+			if usable > 0 and float(p.land) / float(usable) > Balance.RISING_EMPIRE_LAND_THRESHOLD:
+				_rising_empire_id = p.id
+			else:
+				_rising_empire_id = -1
+	_avg_land_cache = float(alive_land) / float(maxi(alive_count, 1))
+
+
+func rising_empire_id() -> int:
+	return _rising_empire_id
+
+
+func is_underdog(p: Player) -> bool:
+	if _avg_land_cache <= 0.0:
+		return false
+	return float(p.land) < Balance.UNDERDOG_LAND_FRACTION_OF_AVG * _avg_land_cache
 
 
 func _apply_expansions() -> void:
@@ -510,6 +574,9 @@ func player_attack(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 	var front: Dictionary = _build_attack_front(player_id, target_owner)
 	if front.is_empty():
 		return false
+	# Attacking a truce partner breaks the truce and makes you an Oathbreaker.
+	if TrucesOps.has_truce(p, target_owner, state.match_time):
+		TrucesOps.break_truce(self, player_id, target_owner)
 	var frac: float = clampf(fraction, Balance.SEND_MIN_FRACTION, Balance.SEND_MAX_FRACTION)
 	var send: float = floorf(p.troops * frac)
 	if send <= 0.0:
@@ -671,7 +738,9 @@ func _expand_one_ring(player: Player) -> void:
 		return
 	var discount: float = 1.0
 	if AbilitiesOps.is_swift_march_active(player, state.match_time):
-		discount = 1.0 - Balance.SWIFT_MARCH_CLAIM_DISCOUNT
+		discount *= 1.0 - Balance.SWIFT_MARCH_CLAIM_DISCOUNT
+	if is_underdog(player):
+		discount *= 1.0 - Balance.UNDERDOG_CLAIM_DISCOUNT
 	var min_cost := INF
 	for ni: int in frontier:
 		var ow: int = state.owners[ni]
@@ -952,6 +1021,14 @@ func player_activate_bombard(player_id: int, target_x: int, target_y: int) -> bo
 	if p == null or not p.is_alive:
 		return false
 	return AbilitiesOps.activate_bombard(self, p, target_x, target_y)
+
+
+# --- Truce commands ---------------------------------------------------------
+
+func player_offer_truce(player_id: int, target_id: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	return TrucesOps.offer(self, player_id, target_id)
 
 
 # --- Boats and loot popups ---------------------------------------------------

@@ -206,16 +206,24 @@ static func _try_attack_weakest(sim: Simulation, player: Player) -> void:
 	if neighbour_tile.is_empty():
 		return
 	var best_id: int = -1
-	var best_d: float = INF
+	var best_score: float = INF
 	var best_tile: int = -1
+	var rising_id: int = sim.rising_empire_id()
 	for ow_v in neighbour_tile.keys():
 		var ow: int = ow_v
 		var def: Player = state.get_player(ow)
 		if def == null or not def.is_alive or def.land <= 0:
 			continue
+		# Honour truces (Opportunists already have their own break logic).
+		if TrucesOps.has_truce(player, ow, state.match_time):
+			continue
 		var d: float = def.troops / float(def.land)
-		if d < best_d:
-			best_d = d
+		var score: float = d
+		# Rising Empire: bots prioritise them (lower score = better target).
+		if rising_id > 0 and ow == rising_id:
+			score *= 0.6
+		if score < best_score:
+			best_score = score
 			best_id = ow
 			best_tile = neighbour_tile[ow_v]
 	if best_id < 0:

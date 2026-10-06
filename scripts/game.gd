@@ -49,6 +49,7 @@ func _ready() -> void:
 	_hud.wall_mode_toggled.connect(_on_wall_mode_toggled)
 	_hud.boat_launch_requested.connect(_on_boat_launch_requested)
 	_hud.ability_pressed.connect(_on_ability_pressed)
+	_hud.offer_truce_requested.connect(_on_offer_truce_requested)
 	_init_camera()
 
 
@@ -164,9 +165,11 @@ func _handle_long_press(screen_pos: Vector2) -> void:
 	if _simulation.state.phase != Balance.PHASE_MATCH:
 		return
 	var ti: int = _simulation.state.idx(tile.x, tile.y)
-	if _simulation.state.owners[ti] != _simulation.local_player_id:
-		return
-	_hud.open_build_menu(tile.x, tile.y)
+	var owner: int = _simulation.state.owners[ti]
+	if owner == _simulation.local_player_id:
+		_hud.open_build_menu(tile.x, tile.y)
+	elif owner > 0 and owner != GameState.RUINS_OWNER_ID:
+		_hud.open_enemy_panel(owner)
 
 
 func _try_tap(screen_pos: Vector2) -> void:

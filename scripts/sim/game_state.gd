@@ -48,6 +48,8 @@ var boats: Array = []                          # Array[Boat]
 var loot_popups: Dictionary = {}
 # Active Bombards: each entry has owner_id, target_x, target_y, until.
 var bombards: Array = []
+# Pending truce offers awaiting a bot answer. Entries: {from_id, to_id, decide_at}.
+var pending_truces: Array = []
 
 # End-of-match outcome, set by Simulation._end_match.
 var winner_id: int = 0
@@ -82,6 +84,7 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	boats = []
 	loot_popups.clear()
 	bombards = []
+	pending_truces = []
 	winner_id = 0
 	win_reason = ""
 	active_announcement_text = ""

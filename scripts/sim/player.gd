@@ -61,6 +61,12 @@ var bombard_cd_until: float = 0.0
 # Bot ability-think jitter so they don't all hit buttons on the same tick.
 var ability_think_timer: float = 0.0
 
+# Truces + Oathbreaker.
+# other_player_id -> absolute match_time this truce expires.
+var active_truces: Dictionary = {}
+var oathbreaker_until: float = 0.0
+var refuses_all_truces: bool = false
+
 
 func troop_cap() -> float:
 	var cap: float = Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)
