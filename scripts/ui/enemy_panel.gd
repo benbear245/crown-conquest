@@ -69,6 +69,10 @@ func _refresh() -> void:
 		tags.append("Rising Empire: your attacks cost %d%% less" % int(Balance.RISING_EMPIRE_ATTACK_DISCOUNT * 100.0))
 	if TrucesOps.is_oathbreaker(target, state.match_time) or target.oathbroken:
 		tags.append("Oathbreaker")
+	if me != null and me.ally_id == target.id:
+		tags.append("Your ally (team %s)" % _sim.team_name(target.team))
+	elif state.teams_mode and target.team >= 0:
+		tags.append("Team %s" % _sim.team_name(target.team))
 	if me != null and TrucesOps.has_truce(me, target.id, state.match_time):
 		tags.append("Truce with you: %s left" % GameState.format_time(TrucesOps.truce_time_left(me, target.id, state.match_time)))
 	_name.text = target.display_name

@@ -31,6 +31,7 @@ func _ready() -> void:
 	add_child(game)
 	await get_tree().process_frame
 	game.set_process(false)   # the test owns the clock
+	game.set("auto_pause", false)
 	sim = game.get("_simulation")
 	hud = game.get("_hud")
 	await _run_all()
@@ -46,6 +47,7 @@ func _run_all() -> void:
 		"bots": preload("res://scripts/tools/checks_bots.gd"),
 		"mobile": preload("res://scripts/tools/checks_mobile.gd"),
 		"feel": preload("res://scripts/tools/checks_feel.gd"),
+		"menus": preload("res://scripts/tools/checks_menus.gd"),
 	}
 	for key: String in suites.keys():
 		if not _suites.is_empty() and not _suites.has(key):
@@ -60,6 +62,15 @@ func _run_all() -> void:
 func new_match(size: int, map_type: int, match_seed: int) -> void:
 	sim.headless = false
 	sim.start_match(size, map_type, match_seed)
+	game.call("_bind_match")
+	hud.end_overlay.reset()
+
+
+# Starts a match the way the menus do (mode, bots, difficulty).
+func new_match_with(cfg: MatchConfig, match_seed: int) -> void:
+	sim.headless = false
+	game.set("_config", cfg)
+	sim.start_with(cfg, match_seed)
 	game.call("_bind_match")
 	hud.end_overlay.reset()
 

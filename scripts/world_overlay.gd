@@ -54,6 +54,9 @@ func _draw_crowns() -> void:
 			# Moving: no special defense yet — a pulsing ring warns everyone.
 			var pulse: float = 0.5 + 0.5 * sin(_time * 8.0)
 			draw_arc(c, 2.2, 0.0, TAU, 32, Color(1, 0.3, 0.2, 0.5 + 0.4 * pulse), 0.35)
+		if state.teams_mode and p.team >= 0:
+			# Teams: a ring in the team's colour (the leaderboard swatch).
+			draw_arc(c, 2.4, 0.0, TAU, 32, Palette.player(p.team * Balance.TEAM_SIZE + 1).lightened(0.25), 0.4)
 		_draw_crown_icon(c, 1.15)
 		# Rising Empire: a star above their Crown. Your truce partners: a white flag.
 		if p.id == state.rising_empire_id:

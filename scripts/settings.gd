@@ -14,6 +14,8 @@ var vibration: bool = true
 var colorblind: bool = false
 # First-time hints already shown (hint id -> true).
 var hints_seen: Dictionary = {}
+# Last choices on the Skirmish / Teams setup screens.
+var last_setup: Dictionary = {}
 # Vibrations actually sent (used by the smoke tests).
 var vibrations_sent: int = 0
 
@@ -31,6 +33,8 @@ func load_settings() -> void:
 	music = bool(cfg.get_value("audio", "music", music))
 	vibration = bool(cfg.get_value("feel", "vibration", vibration))
 	colorblind = bool(cfg.get_value("ui", "colorblind", colorblind))
+	var setup: Variant = cfg.get_value("menus", "last_setup", {})
+	last_setup = setup if setup is Dictionary else {}
 	var seen: Variant = cfg.get_value("ui", "hints_seen", {})
 	hints_seen = seen if seen is Dictionary else {}
 
@@ -43,6 +47,7 @@ func save_settings() -> void:
 	cfg.set_value("feel", "vibration", vibration)
 	cfg.set_value("ui", "colorblind", colorblind)
 	cfg.set_value("ui", "hints_seen", hints_seen)
+	cfg.set_value("menus", "last_setup", last_setup)
 	cfg.save(PATH)
 
 

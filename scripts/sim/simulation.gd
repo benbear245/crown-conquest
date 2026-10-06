@@ -13,6 +13,8 @@ var state: GameState = GameState.new()
 var map_type: int = Balance.MAP_TYPE_CONTINENT
 var size_preset: int = Balance.MAP_SIZE_MEDIUM
 var local_player_id: int = 1
+# How this match was set up (mode, map, bots). Null for plain start_match().
+var config: MatchConfig = null
 # Headless mode: skip presentation-only bookkeeping (capture flashes, floating
 # numbers) so the balance sim doesn't pay for state nobody will draw.
 var headless: bool = false
@@ -25,7 +27,26 @@ func start_default_match(match_seed: int = 0) -> void:
 	start_match(Balance.MAP_SIZE_MEDIUM, Balance.MAP_TYPE_CONTINENT, match_seed, 7)
 
 
+# Starts a match from the menus: map, bots, difficulty, and Teams / Daily /
+# Tutorial rules.
+func start_with(cfg: MatchConfig, match_seed: int) -> void:
+	start_match(cfg.size_preset, cfg.map_type, match_seed, cfg.num_bots)
+	config = cfg
+	var bots: Array[Player] = []
+	for p: Player in state.players:
+		if p.is_bot:
+			bots.append(p)
+	var diffs: Array[int] = MatchConfig.difficulty_list(cfg.difficulty, bots.size(), state.rng)
+	for i in range(bots.size()):
+		bots[i].difficulty = diffs[i]
+	if cfg.mode == MatchConfig.Mode.TEAMS:
+		_setup_teams(cfg)
+	elif cfg.mode == MatchConfig.Mode.TUTORIAL:
+		state.timer_off = true
+
+
 func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> void:
+	config = null
 	size_preset = size
 	map_type = mt
 	_final_siege_announced = false
@@ -55,6 +76,68 @@ func _setup_players(num_bots: int) -> void:
 			p.personality = state.rng.randi() % 4
 			p.think_timer = state.rng.randf_range(0.5, 2.0)
 		state.players.append(p)
+
+
+# Pairs players up: (1, 2), (3, 4), ... You and your ally are team 0. Your
+# ally plays at the chosen difficulty (Normal when Mixed).
+func _setup_teams(cfg: MatchConfig) -> void:
+	state.teams_mode = true
+	for i in range(state.players.size()):
+		var p: Player = state.players[i]
+		@warning_ignore("integer_division")
+		p.team = i / Balance.TEAM_SIZE
+		var mate_index: int = i + 1 if i % 2 == 0 else i - 1
+		if mate_index < state.players.size():
+			p.ally_id = state.players[mate_index].id
+	if state.players.size() > 1:
+		var ally: Player = state.players[1]
+		ally.difficulty = Balance.BOT_DIFFICULTY_NORMAL if cfg.difficulty == MatchConfig.DIFFICULTY_MIXED else cfg.difficulty
+
+
+func team_name(team: int) -> String:
+	if team < 0 or team >= Balance.TEAM_NAMES.size():
+		return "Team %d" % (team + 1)
+	return Balance.TEAM_NAMES[team]
+
+
+func ally_of(p: Player) -> Player:
+	if p == null or p.ally_id <= 0:
+		return null
+	return state.get_player(p.ally_id)
+
+
+# True if the local player won (alone, or with their team in Teams).
+func local_won() -> bool:
+	if state.phase != Balance.PHASE_ENDED:
+		return false
+	if state.winner_id == local_player_id:
+		return true
+	var me: Player = state.get_player(local_player_id)
+	return state.teams_mode and me != null and me.team >= 0 and me.team == state.winner_team
+
+
+func team_land(team: int) -> int:
+	var n: int = 0
+	for p: Player in state.players:
+		if p.team == team and p.is_alive:
+			n += p.land
+	return n
+
+
+# Daily Challenge score: peak land % + a bonus for winning fast.
+func daily_score() -> int:
+	var me: Player = state.get_player(local_player_id)
+	if me == null:
+		return 0
+	var peak_pct: float = 100.0 * float(me.peak_land) / float(maxi(state.total_usable_tiles(), 1))
+	return roundi(peak_pct) + daily_time_bonus()
+
+
+func daily_time_bonus() -> int:
+	if not local_won():
+		return 0
+	var left: float = maxf(0.0, Balance.MATCH_TIME_LIMIT_SEC - state.match_time)
+	return roundi(Balance.DAILY_TIME_BONUS_MAX * left / Balance.MATCH_TIME_LIMIT_SEC)
 
 
 # Fantasy bot names: a title and a name, e.g. "Duke Ashford".
@@ -102,19 +185,37 @@ func _announce_final_siege_once() -> void:
 
 
 func _tick_placement() -> void:
-	state.placement_time_left -= Balance.TICK_DELTA
+	if not state.timer_off:
+		state.placement_time_left -= Balance.TICK_DELTA
 	# Bots place as soon as they get a chance (first tick that reaches them).
+	# In Teams, a bot places next to its ally (a human's ally waits for them).
 	for p: Player in state.players:
 		if p.is_bot and p.crown_x < 0:
-			var pos: Vector2i = CrownsOps.find_valid_crown_position(state)
+			var ally: Player = ally_of(p)
+			if ally != null and not ally.is_bot and ally.crown_x < 0:
+				continue
+			var pos: Vector2i = _crown_spot_for(p)
 			if pos.x >= 0:
 				CrownsOps.place_crown(self, p, pos.x, pos.y)
 	if state.placement_time_left <= 0.0:
 		for p: Player in state.players:
 			if p.crown_x < 0:
-				var pos: Vector2i = CrownsOps.find_valid_crown_position(state)
+				var pos: Vector2i = _crown_spot_for(p)
 				CrownsOps.place_crown(self, p, pos.x, pos.y)
+	var all_placed: bool = true
+	for p: Player in state.players:
+		all_placed = all_placed and p.crown_x >= 0
+	if state.placement_time_left <= 0.0 or (state.timer_off and all_placed):
 		state.phase = Balance.PHASE_MATCH
+
+
+func _crown_spot_for(p: Player) -> Vector2i:
+	var ally: Player = ally_of(p)
+	if ally != null and ally.crown_x >= 0:
+		var near: Vector2i = CrownsOps.find_valid_crown_position_near(state, ally.crown_x, ally.crown_y)
+		if near.x >= 0:
+			return near
+	return CrownsOps.find_valid_crown_position(state)
 
 
 func _tick_bots() -> void:
@@ -144,6 +245,9 @@ func is_underdog(p: Player) -> bool:
 # --- Win conditions ----------------------------------------------------------
 
 func _check_win_conditions() -> void:
+	if state.teams_mode:
+		_check_team_win_conditions()
+		return
 	var alive: Array[Player] = []
 	for p: Player in state.players:
 		if p.is_alive:
@@ -158,7 +262,7 @@ func _check_win_conditions() -> void:
 		if state.land_fraction(p) >= Balance.DOMINION_WIN_FRACTION:
 			end_match(p.id, "Dominion win (60%+ of the usable map)")
 			return
-	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC:
+	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC and not state.timer_off:
 		var leader: Player = alive[0]
 		for p: Player in alive:
 			if p.land > leader.land:
@@ -166,12 +270,48 @@ func _check_win_conditions() -> void:
 		end_match(leader.id, "Most land at the 15:00 limit")
 
 
+# Teams: the last team with a Crown wins; Team Dominion (80%) and the time
+# limit count the team's combined land.
+func _check_team_win_conditions() -> void:
+	var alive_teams: Dictionary = {}       # team -> best (most land) alive player
+	for p: Player in state.players:
+		if p.is_alive:
+			var best: Player = alive_teams.get(p.team, null)
+			if best == null or p.land > best.land:
+				alive_teams[p.team] = p
+	if alive_teams.size() <= 1:
+		if alive_teams.is_empty():
+			end_match(0, "Draw")
+		else:
+			var team: int = alive_teams.keys()[0]
+			_end_team_match(team, alive_teams[team], "Last team with a Crown")
+		return
+	var usable: float = float(maxi(state.total_usable_tiles(), 1))
+	for team: int in alive_teams.keys():
+		if float(team_land(team)) / usable >= Balance.TEAM_DOMINION_WIN_FRACTION:
+			_end_team_match(team, alive_teams[team], "Team Dominion (%d%%+ of the usable map)" % roundi(Balance.TEAM_DOMINION_WIN_FRACTION * 100.0))
+			return
+	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC and not state.timer_off:
+		var lead_team: int = -1
+		for team: int in alive_teams.keys():
+			if lead_team < 0 or team_land(team) > team_land(lead_team):
+				lead_team = team
+		_end_team_match(lead_team, alive_teams[lead_team], "Most land at the 15:00 limit")
+
+
+func _end_team_match(team: int, best: Player, reason: String) -> void:
+	state.winner_team = team
+	end_match(best.id, reason)
+
+
 func end_match(winner_id: int, reason: String) -> void:
 	state.phase = Balance.PHASE_ENDED
 	state.winner_id = winner_id
 	state.win_reason = reason
 	state.attacks.clear()
-	if winner_id > 0:
+	if state.teams_mode and state.winner_team >= 0:
+		announce("Team %s wins! %s" % [team_name(state.winner_team), reason], 6.0)
+	elif winner_id > 0:
 		var w: Player = state.get_player(winner_id)
 		if w != null:
 			announce("%s wins! %s" % [w.display_name, reason], 6.0)
@@ -351,6 +491,38 @@ func player_activate_rally(player_id: int) -> bool:
 func player_activate_bombard(player_id: int, target_x: int, target_y: int) -> bool:
 	var p: Player = _live_player(player_id)
 	return p != null and AbilitiesOps.activate_bombard(self, p, target_x, target_y)
+
+
+# Teams: give your ally 20% of your troops (short cooldown).
+func send_to_ally_block_reason(p: Player) -> String:
+	if p == null or not p.is_alive or p.ally_id <= 0:
+		return "No ally"
+	var ally: Player = state.get_player(p.ally_id)
+	if ally == null or not ally.is_alive:
+		return "Your ally has fallen"
+	if state.phase != Balance.PHASE_MATCH:
+		return "Not yet"
+	if p.ally_send_cd_until > state.match_time:
+		return "Ready in %ds" % ceili(p.ally_send_cd_until - state.match_time)
+	if floorf(p.troops * Balance.ALLY_SEND_FRACTION) < 1.0:
+		return "No troops to send"
+	return ""
+
+
+func player_send_to_ally(player_id: int) -> bool:
+	var p: Player = state.get_player(player_id)
+	if send_to_ally_block_reason(p) != "":
+		return false
+	var ally: Player = state.get_player(p.ally_id)
+	var amount: float = floorf(p.troops * Balance.ALLY_SEND_FRACTION)
+	p.troops -= amount
+	ally.troops += amount
+	p.troops_sent_to_ally += amount
+	p.ally_send_cd_until = state.match_time + Balance.ALLY_SEND_COOLDOWN_SEC
+	if ally.crown_x >= 0:
+		add_popup(state.idx(ally.crown_x, ally.crown_y), "+%s from %s" % [GameState.format_int(int(amount)), p.display_name], ally.id)
+	emit_event({"type": "ally_send", "from_id": p.id, "to_id": ally.id, "amount": amount})
+	return true
 
 
 func player_offer_truce(player_id: int, target_id: int) -> bool:

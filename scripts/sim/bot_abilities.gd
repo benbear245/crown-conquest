@@ -24,7 +24,7 @@ static func think(sim: Simulation, p: Player) -> void:
 	if now >= Balance.BOMBARD_UNLOCK_SEC and p.bombard_cd_until <= now:
 		for id: int in scan.enemy_tile.keys():
 			var e: Player = state.get_player(id)
-			if e == null or not e.is_alive or e.crown_x < 0 or TrucesOps.has_truce(p, id, now):
+			if e == null or not e.is_alive or e.crown_x < 0 or TrucesOps.at_peace(p, id, now):
 				continue
 			if not AbilitiesOps.bombard_in_range(sim, p, e.crown_x, e.crown_y):
 				continue

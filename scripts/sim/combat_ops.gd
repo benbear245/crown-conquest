@@ -27,6 +27,8 @@ static func player_attack(sim: Simulation, player_id: int, tx: int, ty: int, fra
 	var defender: Player = state.get_player(target_owner)
 	if defender == null or not defender.is_alive:
 		return false
+	if p.ally_id == target_owner:
+		return false   # Teams: allies can't attack each other
 	if active_attack_count(state, player_id) >= Balance.MAX_SIMULTANEOUS_ATTACKS:
 		return false
 	var front: Dictionary = build_attack_front(state, player_id, target_owner)

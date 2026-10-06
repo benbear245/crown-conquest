@@ -12,6 +12,12 @@ var is_alive: bool = true
 var is_bot: bool = false
 var difficulty: int = 0        # Balance.BOT_DIFFICULTY_*
 var personality: int = 0       # Balance.BOT_PERSONALITY_*
+# Teams mode: team index (-1 = no team) and the teammate's id (0 = none).
+# Allies can't attack each other and can send each other troops.
+var team: int = -1
+var ally_id: int = 0
+var ally_send_cd_until: float = 0.0
+var troops_sent_to_ally: float = 0.0
 
 # Crown position (centre tile). (-1, -1) means not placed.
 var crown_x: int = -1

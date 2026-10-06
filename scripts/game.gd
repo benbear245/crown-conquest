@@ -3,7 +3,8 @@ extends Node2D
 # Root of the game scene. Owns the Simulation, drives it at fixed ticks,
 # tells the Map to render dirty tiles, and routes gestures (TouchInput) into
 # the sim, the HUD panels or the camera. Targeting modes (walls, boats,
-# Bombard, Crown move) live in Targeting.
+# Bombard, Crown move) live in Targeting. The match settings come from the
+# menus (Session.config); the pause menu pauses the whole tree.
 
 const MAX_TICKS_PER_FRAME: int = 5
 
@@ -13,7 +14,11 @@ const MAX_TICKS_PER_FRAME: int = 5
 @onready var _camera: CameraRig = $Camera2D
 @onready var _feel: GameFeel = $GameFeel
 
+# Pause automatically when the app goes to the background (tests turn it off).
+var auto_pause: bool = true
 var _simulation: Simulation
+var _config: MatchConfig
+var _result_recorded: bool = false
 var _targeting: Targeting
 var _touch: TouchInput = TouchInput.new()
 var _tick_accumulator: float = 0.0
@@ -22,15 +27,21 @@ var _was_in_sweet_spot: bool = false
 
 func _ready() -> void:
 	_simulation = Simulation.new()
-	_simulation.start_default_match(_random_seed())
+	_config = Session.current_config()
+	_simulation.start_with(_config, _config.next_seed())
 	_targeting = Targeting.new(_simulation, _hud, _overlay)
 	_touch.tapped.connect(_on_tap)
 	_touch.long_pressed.connect(_on_long_press)
 	_touch.drag_started.connect(_on_drag_started)
 	_touch.dragged.connect(_on_drag)
 	_touch.pinched.connect(func(f: float, c: Vector2) -> void: _camera.zoom_at(f, c); _hud.hint("pan_zoom"))
-	_hud.new_map_pressed.connect(_start_new_match)
+	_hud.pause_requested.connect(pause_game)
+	_hud.pause_menu.resume_pressed.connect(resume_game)
+	_hud.pause_menu.restart_pressed.connect(_start_new_match)
+	_hud.pause_menu.quit_pressed.connect(_quit_to_menu)
 	_hud.end_overlay.play_again_pressed.connect(_start_new_match)
+	_hud.end_overlay.menu_pressed.connect(_quit_to_menu)
+	_hud.ally_panel.send_pressed.connect(func() -> void: _simulation.player_send_to_ally(_simulation.local_player_id))
 	_hud.jump_to_crown_pressed.connect(_jump_to_crown)
 	_hud.jump_to_world.connect(func(w: Vector2) -> void: _camera.look_at_tile(Vector2i(w)))
 	_hud.build_menu.build_requested.connect(_on_build_requested)
@@ -52,6 +63,7 @@ func _bind_match() -> void:
 	_hud.setup(_simulation, _map)
 	_camera.fit_to_world(_map.world_size())
 	_feel.setup(_simulation, _camera)
+	_result_recorded = false
 	_targeting.exit()
 	_hud.hint("placement")
 
@@ -70,6 +82,7 @@ func _process(delta: float) -> void:
 	_hud.consume_events(_simulation.state.events)
 	_simulation.state.events.clear()
 	_map.render()
+	_record_result_once()
 	_hud.update_from_state()
 	_sync_overlay()
 	_watch_local_player()
@@ -182,6 +195,9 @@ func _tap_normal(tile: Vector2i) -> void:
 			_hud.hint("boat")
 		return
 	var frac: float = _hud.send_fraction()
+	if me.ally_id > 0 and owner_id == me.ally_id:
+		_hud.alerts.push("That's your ally — allies can't attack each other.", "info", 2.5, "ally_tap")
+		return
 	if owner_id == 0 or owner_id == GameState.RUINS_OWNER_ID:
 		if _simulation.player_expand(me.id, tile.x, tile.y, frac):
 			_hud.hint("expand")
@@ -232,15 +248,80 @@ func _jump_to_crown() -> void:
 
 
 func _start_new_match() -> void:
-	_simulation.start_match(_simulation.size_preset, _simulation.map_type, _random_seed())
+	get_tree().paused = false
+	_hud.pause_menu.close()
+	_simulation.start_with(_config, _config.next_seed())
 	_hud.end_overlay.reset()
 	_bind_match()
+
+
+func _quit_to_menu() -> void:
+	var screen: String = "daily" if _config.mode == MatchConfig.Mode.DAILY else ""
+	Session.to_menu(screen)
+
+
+# --- Pause -------------------------------------------------------------------
+
+func pause_game() -> void:
+	if get_tree().paused:
+		return
+	_targeting.exit()
+	_hud.close_panels()
+	get_tree().paused = true
+	_hud.pause_menu.open(_config.describe() if _config.mode != MatchConfig.Mode.DAILY else "Daily Challenge " + _config.daily_date)
+
+
+func resume_game() -> void:
+	_hud.pause_menu.close()
+	get_tree().paused = false
+	_tick_accumulator = 0.0
+
+
+# The game pauses when the app goes to the background (or loses focus).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if auto_pause and _simulation != null and _simulation.state.phase != Balance.PHASE_ENDED and not get_tree().paused:
+			pause_game()
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	# Android back button / Escape opens the pause menu (or closes it).
+	if event.is_action_pressed("ui_cancel"):
+		if get_tree().paused:
+			resume_game()
+		else:
+			pause_game()
+		get_viewport().set_input_as_handled()
+
+
+# --- Results -------------------------------------------------------------------
+
+# Once per match, when it's over for you (you won, lost, or your Crown fell):
+# the Daily Challenge score is saved.
+func _record_result_once() -> void:
+	if _result_recorded:
+		return
+	var st: GameState = _simulation.state
+	var me: Player = st.get_player(_simulation.local_player_id)
+	var over_for_me: bool = st.phase == Balance.PHASE_ENDED or (me != null and not me.is_alive and not _team_still_alive(me))
+	if not over_for_me:
+		return
+	_result_recorded = true
+	if _config.mode == MatchConfig.Mode.DAILY:
+		var score: int = _simulation.daily_score()
+		var bonus: int = _simulation.daily_time_bonus()
+		var new_best: bool = SaveData.submit_daily(_config.daily_date, score)
+		var text: String = "Daily score %d  (peak land %d + time bonus %d)" % [score, score - bonus, bonus]
+		text += "\nNew best today!" if new_best else "\nBest today: %d" % SaveData.daily_best(_config.daily_date)
+		_hud.end_overlay.extra_text = text
+
+
+func _team_still_alive(me: Player) -> bool:
+	var ally: Player = _simulation.ally_of(me)
+	return ally != null and ally.is_alive and _simulation.state.phase != Balance.PHASE_ENDED
 
 
 func _on_settings_changed() -> void:
 	if _map.uses_colorblind() != Settings.colorblind:
 		_map.repaint_all()
 
-
-func _random_seed() -> int:
-	return int(Time.get_unix_time_from_system() * 1000.0) ^ randi()

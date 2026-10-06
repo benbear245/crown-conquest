@@ -183,9 +183,9 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 		return false
 	if not state.in_bounds(target_x, target_y):
 		return false
-	# Never on a truce partner's land (that would be an attack).
+	# Never on a truce partner's or ally's land (that would be an attack).
 	var target_owner: int = state.owners[state.idx(target_x, target_y)]
-	if target_owner > 0 and TrucesOps.has_truce(p, target_owner, now):
+	if target_owner > 0 and TrucesOps.at_peace(p, target_owner, now):
 		return false
 	# Target must be within BOMBARD_RANGE_TILES of any of the player's border tiles.
 	if not bombard_in_range(sim, p, target_x, target_y):
@@ -296,7 +296,7 @@ static func tick(sim: Simulation) -> void:
 					if ow == int(b["owner_id"]):
 						continue
 					var bomber: Player = state.get_player(int(b["owner_id"]))
-					if bomber != null and TrucesOps.has_truce(bomber, ow, now):
+					if bomber != null and TrucesOps.at_peace(bomber, ow, now):
 						continue
 					owner_damage[ow] = float(owner_damage.get(ow, 0.0)) + dmg_per_tile
 			for ow_v in owner_damage.keys():

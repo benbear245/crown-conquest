@@ -56,3 +56,32 @@ static func button(text: String, min_width: int = 0) -> Button:
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.focus_mode = Control.FOCUS_NONE
 	return b
+
+
+# A big menu button (main menu, Start).
+static func big_button(text: String, min_width: int = 380, font_size: int = 24) -> Button:
+	var b := button(text, min_width)
+	b.custom_minimum_size.y = 76
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.add_theme_font_size_override("font_size", font_size)
+	return b
+
+
+# A choice in a row of options: gold outline while selected.
+static func choice_button(text: String, min_width: int = 150) -> Button:
+	var b := button(text, min_width)
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.toggle_mode = true
+	b.add_theme_font_size_override("font_size", FONT_NORMAL)
+	var on := StyleBoxFlat.new()
+	on.bg_color = Color(0.22, 0.20, 0.10, 0.95)
+	on.border_color = Color(0.98, 0.84, 0.25)
+	on.set_border_width_all(3)
+	on.set_corner_radius_all(8)
+	on.content_margin_left = 10
+	on.content_margin_right = 10
+	b.add_theme_stylebox_override("pressed", on)
+	b.add_theme_stylebox_override("hover_pressed", on)
+	b.add_theme_color_override("font_pressed_color", Color(1.0, 0.92, 0.55))
+	b.add_theme_color_override("font_hover_pressed_color", Color(1.0, 0.92, 0.55))
+	return b

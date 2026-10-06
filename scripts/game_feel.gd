@@ -66,12 +66,15 @@ func consume(events: Array) -> void:
 			"truce":
 				if int(e.a) == me or int(e.b) == me:
 					Audio.play("sfx_truce", -6.0)
+			"ally_send":
+				if int(e.to_id) == me or int(e.from_id) == me:
+					Audio.play("sfx_loot", -6.0, 0.85)
 			"final_siege":
 				Audio.play("sfx_crown_alarm_horn", -4.0, 0.8)
 				Audio.music("music_siege_loop")
 			"match_end":
 				Audio.music("")
-				Audio.play("sfx_victory" if int(e.winner_id) == me else "sfx_defeat")
+				Audio.play("sfx_victory" if _sim.local_won() else "sfx_defeat")
 
 
 func _crown_fall(mine: bool) -> void:

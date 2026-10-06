@@ -101,7 +101,7 @@ static func _attacks(sim: Simulation, p: Player, scan: BotScan, out: Array[Dicti
 	var weakest_d: float = INF
 	for id: int in scan.enemy_tile.keys():
 		var e: Player = state.get_player(id)
-		if e != null and e.is_alive and e.land > 0 and not TrucesOps.has_truce(p, id, state.match_time):
+		if e != null and e.is_alive and e.land > 0 and not TrucesOps.at_peace(p, id, state.match_time):
 			var d: float = e.troops / float(e.land)
 			if d < weakest_d:
 				weakest_d = d
@@ -117,7 +117,7 @@ static func _attacks(sim: Simulation, p: Player, scan: BotScan, out: Array[Dicti
 		var e: Player = state.get_player(id)
 		if e == null or not e.is_alive or e.land <= 0:
 			continue
-		if TrucesOps.has_truce(p, id, state.match_time):
+		if TrucesOps.at_peace(p, id, state.match_time):
 			continue
 		var tile: int = scan.enemy_tile[id]
 		if p.difficulty == EASY and _easy_spares_crown(state, e, tile):

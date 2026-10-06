@@ -16,6 +16,7 @@ var _held: bool = false
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # keeps drawing behind the pause menu
 	add_theme_stylebox_override("panel", UIStyle.panel_style(8))
 	_view = Control.new()
 	_view.custom_minimum_size = MAP_SIZE

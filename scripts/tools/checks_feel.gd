@@ -171,7 +171,7 @@ func _settings(t: SmokeTest, feel: GameFeel) -> void:
 	Settings.set_value("sound", true)
 	Settings.set_value("vibration", true)
 	# The in-match menu has a toggle for each setting.
-	var list: SettingsList = t.hud.menu_panel.settings_list
+	var list: SettingsList = t.hud.pause_menu.settings_list
 	var ok: bool = true
 	for key: String in ["left_handed", "sound", "music", "vibration", "colorblind"]:
 		ok = ok and list.button_for(key) != null
@@ -223,7 +223,9 @@ func _music(t: SmokeTest, feel: GameFeel) -> void:
 	t.check(Audio.current_music() == "music_calm_loop", "calm music during the match")
 	feel.consume([{"type": "final_siege"}])
 	t.check(Audio.current_music() == "music_siege_loop", "music switches to the intense track in the Final Siege")
-	feel.consume([{"type": "match_end", "winner_id": t.sim.local_player_id}])
+	t.sim.end_match(t.sim.local_player_id, "test")
+	feel.consume(t.sim.state.events)
+	t.sim.state.events.clear()
 	t.check(Audio.current_music() == "" and int(Audio.play_counts.get("sfx_victory", 0)) > 0, "music stops and a victory sting plays at the end")
 	feel.setup(t.sim, t.game.get("_camera"))
 

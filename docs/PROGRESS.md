@@ -371,3 +371,23 @@ godot --headless --path . res://scenes/balance_sim.tscn --matches 100 --jobs 4
 - Reach the Final Siege (10:00): the music changes.
 - Menu: switch Sound, Music, Vibration and Colour-blind palette on and off; they should apply instantly and still be set after restarting the game.
 - Replace one file in `assets/audio/` with a real sound of the same name and check it plays.
+
+## Prompt 14: Menus and modes
+
+**Built**
+- The game now opens on a **main menu** (`scenes/menu.tscn`) over a randomly generated map: Play (Skirmish), Teams, Daily Challenge, Customize, Stats, Settings. Android's back button (or Escape) goes back a screen.
+- **Skirmish setup**: map size, map type, number of bots (− / +, capped by the map size: 4 / 7 / 11), difficulty (Easy / Normal / Hard / Mixed) and an optional seed (any word or number replays the same map). Your last choices are remembered. Mixed = about 3 in 8 Easy, 1 in 8 Hard (at least one), the rest Normal.
+- **Teams**: 4 teams of 2 on a Medium map (Lions, Wolves, Eagles, Stags). You get a bot ally (Normal when Mixed) who waits for you to place your Crown and settles next to you; bot pairs also start together. Allies can't attack each other (a tap on your ally's land just tells you so), can't Bombard or land boats on each other, and don't offer each other truces. A panel on the left shows your ally and a **Send 20% to ally** button (10 s cooldown). Bot allies send 20% when their partner's Crown is under attack or they're low on troops. The leaderboard ranks teams by combined land, Crowns get a ring in their team's colour, and the long-press panel shows each player's team. The team wins together: last team with a Crown, or **80%** of the land together (new number, `TEAM_DOMINION_WIN_FRACTION`; with the solo 60% two allies won in about 3 minutes; now the median all-bot Teams match is ~4:40, same as solo matches before Prompt 17's balance pass). If your Crown falls while your ally lives, the match goes on and you can watch.
+- **Daily Challenge**: the date picks the seed and the map type; fixed settings (Medium, 7 bots, Mixed). Score = peak land % (rounded) + a time bonus if you win: 100 × (15:00 − win time) / 15:00, so a win at 6:00 adds 60. Try as often as you like; the best score per day and the best ever are saved. The end screen shows your score and "New best today!".
+- **Pause menu** (Menu button, or Android back): Resume, Restart, Settings, Quit to menu. Restart and Quit ask "Tap again" so you can't lose a match by accident. The game pauses itself when the app goes to the background or loses focus. The end screen got a "Main menu" button.
+- New `SaveData` autoload saves to `user://save.json` safely (write a temp file, read it back, then rename; if the game dies between the two, the temp file is loaded next time). Progression will be stored there too.
+- Fixed: the end-of-match screen and the floating numbers layer had zero size (their full-screen anchors were set after they were already on screen), so the end screen sat in the top-left corner without the dark backdrop. Now centred and dimmed.
+- Customize and Stats are placeholder screens until Prompt 15.
+- New smoke suite `menus` (60 checks) and a scene-flow test (`scenes/tools/flow_test.tscn`, 10 checks: menu → match → pause → quit → Daily). All 224 smoke checks pass. Solo matches play out exactly as before (same seeds give identical results).
+
+**What to test**
+- Launch the game: the main menu appears. Try every button; Back (and the phone's back button) returns.
+- Skirmish: pick Small + 2 bots + Hard, and type a seed like `castle`. Play, then Restart from the pause menu: same map. Clear the seed: a new map each time.
+- Teams: your ally's Crown appears next to yours. Try tapping your ally's land (nothing happens except a message), press Send 20% to ally, and watch your ally send you troops when you're under attack. Win as a team.
+- Daily Challenge: play, finish (win or lose), check the score on the end screen and on the Daily screen; play again and see the best stay.
+- Press Menu mid-match: the game freezes; Resume, Restart (tap twice) and Quit (tap twice) work. Switch to another app on your phone and come back: the game is paused.

@@ -3,11 +3,13 @@ extends PanelContainer
 
 # Top 5 players by land. Crown icon while alive (skull once out), a star for
 # the Rising Empire, and a white flag with the time left for your truces.
+# In Teams it ranks the teams by their combined land instead.
 
 const ROWS: int = 5
 
 var _sim: Simulation
 var _rows: Array[Dictionary] = []
+var _title: Label
 
 
 func _ready() -> void:
@@ -17,7 +19,8 @@ func _ready() -> void:
 	vbox.add_theme_constant_override("separation", 4)
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(vbox)
-	vbox.add_child(UIStyle.label("Leaderboard", UIStyle.FONT_NORMAL))
+	_title = UIStyle.label("Leaderboard", UIStyle.FONT_NORMAL)
+	vbox.add_child(_title)
 	for i in range(ROWS):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
@@ -56,6 +59,10 @@ func update_view() -> void:
 	if _sim == null:
 		return
 	var st: GameState = _sim.state
+	_title.text = "Teams" if st.teams_mode else "Leaderboard"
+	if st.teams_mode:
+		_update_teams(st)
+		return
 	var ranked: Array[Player] = st.players.duplicate()
 	ranked.sort_custom(func(a: Player, b: Player) -> bool: return a.land > b.land)
 	var me: Player = st.get_player(_sim.local_player_id)
@@ -77,3 +84,37 @@ func update_view() -> void:
 		(r["flag"] as IconView).visible = truce_left > 0.0
 		(r["truce"] as Label).text = ("%d" % int(ceilf(truce_left))) if truce_left > 0.0 else ""
 		(r["land"] as Label).text = "%.1f%%" % (100.0 * st.land_fraction(p))
+
+
+func _update_teams(st: GameState) -> void:
+	var me: Player = st.get_player(_sim.local_player_id)
+	var teams: Array[int] = []
+	for p: Player in st.players:
+		if not teams.has(p.team):
+			teams.append(p.team)
+	teams.sort_custom(func(a: int, b: int) -> bool: return _sim.team_land(a) > _sim.team_land(b))
+	var usable: float = float(maxi(st.total_usable_tiles(), 1))
+	for i in range(ROWS):
+		var r: Dictionary = _rows[i]
+		if i >= teams.size():
+			(r["row"] as Control).visible = false
+			continue
+		var team: int = teams[i]
+		var alive: bool = false
+		var first: Player = null
+		for p: Player in st.players:
+			if p.team == team:
+				alive = alive or p.is_alive
+				if first == null:
+					first = p
+		(r["row"] as Control).visible = true
+		(r["swatch"] as ColorRect).color = Palette.player(first.id) if alive else Color(0.25, 0.25, 0.25)
+		(r["status"] as IconView).kind = IconView.Kind.CROWN if alive else IconView.Kind.SKULL
+		var label: String = _sim.team_name(team)
+		if me != null and me.team == team:
+			label += " (you)"
+		(r["name"] as Label).text = label
+		(r["rising"] as IconView).visible = false
+		(r["flag"] as IconView).visible = false
+		(r["truce"] as Label).text = ""
+		(r["land"] as Label).text = "%.1f%%" % (100.0 * float(_sim.team_land(team)) / usable)

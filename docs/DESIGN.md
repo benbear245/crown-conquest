@@ -204,7 +204,7 @@ Variety comes from modes and map types, and the reason to keep playing comes fro
 | Mode | How it works |
 | --- | --- |
 | Skirmish | You vs bots. Choose map size, map type, number of bots, and difficulty |
-| Teams | 4 teams of 2: you and a bot ally vs 3 bot pairs. Allies can't attack each other and can send each other 20% of their troops. The last team with a Crown wins |
+| Teams | 4 teams of 2: you and a bot ally vs 3 bot pairs. Allies can't attack each other and can send each other 20% of their troops. The last team with a Crown wins (or a team that owns 80% of the land together) |
 | Daily Challenge | Everyone gets the same map and settings each day (the date sets the map seed). Score = peak land % + a time bonus for winning fast. Your best score is saved |
 | Online multiplayer | Planned for after launch |
 

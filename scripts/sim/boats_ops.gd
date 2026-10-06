@@ -21,6 +21,8 @@ static func launch_block_reason(sim: Simulation, player: Player, port_x: int, po
 	var ow: int = state.owners[target_ti]
 	if ow == player.id:
 		return "That's your own land"
+	if player.ally_id > 0 and ow == player.ally_id:
+		return "That's your ally's land"
 	var is_enemy: bool = ow > 0 and ow != GameState.RUINS_OWNER_ID
 	if is_enemy and state.match_time < Balance.PEACE_PERIOD_SEC:
 		return "No attacks during the peace period"
@@ -133,8 +135,8 @@ static func land(sim: Simulation, b: Boat) -> void:
 		return
 	var ti: int = state.idx(b.landing_tile_x, b.landing_tile_y)
 	var ow: int = state.owners[ti]
-	if ow == p.id:
-		# Already ours (we expanded there meanwhile): troops join the expansion.
+	if ow == p.id or (p.ally_id > 0 and ow == p.ally_id):
+		# Ours or our ally's (taken meanwhile): troops join our expansion.
 		_add_to_expansion(p, b.troops)
 		return
 	if ow > 0 and ow != GameState.RUINS_OWNER_ID:

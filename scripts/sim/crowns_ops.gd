@@ -82,6 +82,21 @@ static func find_valid_crown_position(state: GameState) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
+# Teams: a spot close to an ally's Crown (still at least the normal Crown
+# spacing away). Returns (-1, -1) if nothing fits nearby.
+static func find_valid_crown_position_near(state: GameState, ax: int, ay: int) -> Vector2i:
+	var r_min: float = float(Balance.CROWN_MIN_DIST_FROM_OTHER)
+	var r_max: float = float(maxi(Balance.ALLY_CROWN_MIN_DIST, Balance.CROWN_MIN_DIST_FROM_OTHER) + 14)
+	for _attempt in range(600):
+		var ang: float = state.rng.randf() * TAU
+		var r: float = state.rng.randf_range(r_min, r_max)
+		var x: int = ax + roundi(cos(ang) * r)
+		var y: int = ay + roundi(sin(ang) * r)
+		if is_valid_crown_tile(state, x, y, Balance.CROWN_MIN_DIST_FROM_OTHER):
+			return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+
 # --- Crown move --------------------------------------------------------------
 
 static func move_cost(player: Player) -> float:

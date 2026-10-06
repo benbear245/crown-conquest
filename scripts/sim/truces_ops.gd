@@ -14,6 +14,11 @@ static func has_truce(a: Player, b_id: int, now: float) -> bool:
 	return a.active_truces.has(b_id) and float(a.active_truces[b_id]) > now
 
 
+# Truce partners and Teams allies don't fight each other.
+static func at_peace(a: Player, b_id: int, now: float) -> bool:
+	return (a.ally_id > 0 and a.ally_id == b_id) or has_truce(a, b_id, now)
+
+
 static func truce_time_left(a: Player, b_id: int, now: float) -> float:
 	if not a.active_truces.has(b_id):
 		return 0.0
@@ -43,6 +48,8 @@ static func pending_offer(state: GameState, from_id: int, to_id: int) -> Diction
 static func offer_block_reason(state: GameState, from_p: Player, to_p: Player) -> String:
 	if from_p == null or to_p == null or not from_p.is_alive or not to_p.is_alive or from_p.id == to_p.id:
 		return "Not possible"
+	if from_p.ally_id == to_p.id:
+		return "Allies are always at peace"
 	if has_truce(from_p, to_p.id, state.match_time):
 		return "Already in a truce"
 	if to_p.is_bot and from_p.oathbroken:

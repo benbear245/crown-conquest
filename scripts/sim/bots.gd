@@ -23,6 +23,8 @@ static func tick(sim: Simulation, player: Player) -> void:
 	if player.think_timer > 0.0:
 		return
 	player.think_timer = _think_interval(player.difficulty, state.rng)
+	if player.ally_id > 0:
+		_support_ally(sim, player)
 	if player.border.is_empty():
 		return
 	var scan: BotScan = BotScan.scan(sim, player)
@@ -38,6 +40,19 @@ static func tick(sim: Simulation, player: Player) -> void:
 			var kind: String = str(moves[i].type)
 			player.bot_actions[kind] = int(player.bot_actions.get(kind, 0)) + 1
 			return
+
+
+# Teams: send 20% to the ally when it's in trouble (Crown under attack or
+# low on troops) and this bot has plenty to spare.
+static func _support_ally(sim: Simulation, p: Player) -> void:
+	var ally: Player = sim.ally_of(p)
+	if ally == null or sim.send_to_ally_block_reason(p) != "":
+		return
+	if p.troops < p.troop_cap() * Balance.BOT_ALLY_HELP_MIN_RATIO:
+		return
+	var now: float = sim.state.match_time
+	if ally.crown_alert_until > now or ally.troops < ally.troop_cap() * Balance.BOT_ALLY_HELP_BELOW_RATIO:
+		sim.player_send_to_ally(p.id)
 
 
 # Difficulty controls how often a bot picks a worse move: Easy makes a random

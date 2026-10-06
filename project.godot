@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="CrownConquest"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
@@ -20,6 +20,8 @@ config/icon="res://icon.svg"
 Balance="*res://scripts/balance.gd"
 Settings="*res://scripts/settings.gd"
 Audio="*res://scripts/audio.gd"
+SaveData="*res://scripts/save_data.gd"
+Session="*res://scripts/session.gd"
 
 [display]
 

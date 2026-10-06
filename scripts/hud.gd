@@ -12,7 +12,7 @@ extends CanvasLayer
 
 signal jump_to_crown_pressed
 signal jump_to_world(world_pos: Vector2)
-signal new_map_pressed
+signal pause_requested
 
 const MARGIN: int = 12
 const LEFT_COLUMN_W: int = 440
@@ -44,7 +44,8 @@ var end_overlay: EndOverlay
 var modifier_badges: ModifierBadges
 var truce_panel: TrucePanel
 var leaderboard: Leaderboard
-var menu_panel: MenuPanel
+var ally_panel: AllyPanel
+var pause_menu: PauseMenu
 
 
 func _ready() -> void:
@@ -63,12 +64,8 @@ func _ready() -> void:
 	add_child(_press_ring)
 	end_overlay = EndOverlay.new()
 	add_child(end_overlay)
-	menu_panel = MenuPanel.new()
-	menu_panel.set_anchors_preset(Control.PRESET_CENTER)
-	menu_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	menu_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	menu_panel.new_map_pressed.connect(func() -> void: new_map_pressed.emit())
-	add_child(menu_panel)
+	pause_menu = PauseMenu.new()
+	add_child(pause_menu)
 	Settings.changed.connect(apply_layout)
 	get_viewport().size_changed.connect(apply_layout)
 	apply_layout()
@@ -77,7 +74,7 @@ func _ready() -> void:
 func setup(sim: Simulation, map: Map) -> void:
 	_sim = sim
 	_state = sim.state
-	for c: Variant in [build_menu, keep_panel, ability_bar, enemy_panel, end_overlay, modifier_badges, truce_panel, leaderboard, top_bar, attack_list]:
+	for c: Variant in [build_menu, keep_panel, ability_bar, enemy_panel, end_overlay, modifier_badges, truce_panel, leaderboard, top_bar, attack_list, ally_panel]:
 		c.setup(sim)
 	popup_layer.setup(sim.state, sim.local_player_id)
 	minimap.setup(map, sim.state, sim.local_player_id)
@@ -90,14 +87,13 @@ func send_fraction() -> float:
 
 
 func any_panel_open() -> bool:
-	return build_menu.visible or keep_panel.visible or enemy_panel.visible or menu_panel.visible
+	return build_menu.visible or keep_panel.visible or enemy_panel.visible
 
 
 func close_panels() -> void:
 	build_menu.close_menu()
 	keep_panel.close_panel()
 	enemy_panel.close_panel()
-	menu_panel.visible = false
 
 
 # Shows a short tip the first time an action happens.
@@ -119,7 +115,7 @@ func _build() -> void:
 	top_bar = TopBar.new()
 	top_bar.crown_double_tapped.connect(func() -> void: jump_to_crown_pressed.emit())
 	top_bar.crown_tapped_once.connect(func() -> void: hint("crown_button"))
-	top_bar.menu_pressed.connect(func() -> void: menu_panel.open())
+	top_bar.menu_pressed.connect(func() -> void: pause_requested.emit())
 	_safe.add_child(top_bar)
 	_left_column = VBoxContainer.new()
 	_left_column.add_theme_constant_override("separation", 8)
@@ -130,6 +126,8 @@ func _build() -> void:
 	_left_column.add_child(modifier_badges)
 	truce_panel = TrucePanel.new()
 	_left_column.add_child(truce_panel)
+	ally_panel = AllyPanel.new()
+	_left_column.add_child(ally_panel)
 	leaderboard = Leaderboard.new()
 	_safe.add_child(leaderboard)
 	_alert_column = VBoxContainer.new()
@@ -258,6 +256,7 @@ func update_from_state() -> void:
 	leaderboard.update_view()
 	modifier_badges.update_view()
 	truce_panel.update_view()
+	ally_panel.update_view()
 	ability_bar.update_view()
 	end_overlay.update_view()
 	_update_placement()
@@ -269,12 +268,21 @@ func consume_events(events: Array) -> void:
 	for e: Dictionary in events:
 		if e.type == "announce":
 			alerts.push(str(e.text), "event", float(e.get("seconds", 4.0)))
+		elif e.type == "ally_send" and int(e.to_id) == _sim.local_player_id:
+			var from_p: Player = _state.get_player(int(e.from_id))
+			alerts.push("%s sent you %s troops" % [from_p.display_name if from_p != null else "Your ally", GameState.format_int(int(e.amount))], "info", 3.0)
 
 
 func _update_placement() -> void:
 	_placement_msg.visible = _state.phase == Balance.PHASE_PLACEMENT
 	if _placement_msg.visible:
-		_placement_msg.text = "Tap plains, forest or hills to place your Crown  (%ds)" % maxi(0, ceili(_state.placement_time_left))
+		var text: String = "Tap plains, forest or hills to place your Crown"
+		if not _state.timer_off:
+			text += "  (%ds)" % maxi(0, ceili(_state.placement_time_left))
+		var ally: Player = _sim.ally_of(_state.get_player(_sim.local_player_id))
+		if ally != null:
+			text += "\nYour ally %s will settle next to you" % ally.display_name
+		_placement_msg.text = text
 
 
 func _update_crown_alert() -> void:

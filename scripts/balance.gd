@@ -354,6 +354,30 @@ func color_for_player(player_id: int) -> Color:
 	return PLAYER_COLORS[player_id]
 
 
+# --- Modes ---------------------------------------------------------------------
+# Teams: 4 teams of 2 (you + a bot ally vs 3 bot pairs) on a Medium map.
+# (TEAM_SIZE, TEAM_COUNT and ALLY_SEND_FRACTION are in the Teams section.)
+static var TEAM_NAMES: PackedStringArray = PackedStringArray(["Lions", "Wolves", "Eagles", "Stags"])
+const ALLY_SEND_COOLDOWN_SEC: float = 10.0
+# A team needs this much of the usable land (combined) for a Dominion win.
+# Higher than the solo 60%: two allies who never fight each other reach 60%
+# together in about 3 minutes, which ended Teams matches far too early.
+const TEAM_DOMINION_WIN_FRACTION: float = 0.80
+const ALLY_CROWN_MIN_DIST: int = 26           # bot allies place their Crowns this close (or as close as allowed)
+const BOT_ALLY_HELP_MIN_RATIO: float = 0.55   # bot helps only with troops >= 55% of its cap
+const BOT_ALLY_HELP_BELOW_RATIO: float = 0.25 # ...when the ally is under 25% of its cap or its Crown is attacked
+
+# Daily Challenge: fixed settings; the date picks the seed and map type.
+const DAILY_MAP_SIZE: int = MAP_SIZE_MEDIUM
+const DAILY_BOTS: int = 7
+const DAILY_DIFFICULTY: int = 3               # MatchConfig.DIFFICULTY_MIXED
+# Score = peak land % (rounded) + a time bonus for winning:
+# DAILY_TIME_BONUS_MAX * (15:00 - win time) / 15:00, so a win at 6:00 adds 60.
+const DAILY_TIME_BONUS_MAX: float = 100.0
+
+const TUTORIAL_SEED: int = 4242
+
+
 # --- Bot names ---------------------------------------------------------------
 static var BOT_TITLES: PackedStringArray = PackedStringArray([
 	"Duke", "Duchess", "Lord", "Lady", "Baron", "Baroness",

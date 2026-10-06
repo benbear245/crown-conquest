@@ -60,9 +60,15 @@ var pending_truces: Array = []
 # The game scene drains this every frame; the balance sim clears it.
 var events: Array = []
 
-# End-of-match outcome, set by Simulation.end_match.
+# End-of-match outcome, set by Simulation.end_match. In Teams the whole
+# winning team wins (winner_team), winner_id is its best player.
 var winner_id: int = 0
+var winner_team: int = -1
 var win_reason: String = ""
+# Teams mode: players have a team and an ally (see Player.team / ally_id).
+var teams_mode: bool = false
+# Tutorial: no placement countdown, no Final Siege and no 15:00 limit.
+var timer_off: bool = false
 # Top-of-screen banner shown by the HUD until the expiry.
 var active_announcement_text: String = ""
 var active_announcement_until: float = 0.0
@@ -96,7 +102,7 @@ static func format_int(n: int) -> String:
 
 
 func is_final_siege() -> bool:
-	return match_time >= Balance.FINAL_SIEGE_START_SEC
+	return match_time >= Balance.FINAL_SIEGE_START_SEC and not timer_off
 
 
 func configure(w: int, h: int, new_seed: int) -> void:
@@ -123,7 +129,10 @@ func configure(w: int, h: int, new_seed: int) -> void:
 	pending_truces = []
 	events = []
 	winner_id = 0
+	winner_team = -1
 	win_reason = ""
+	teams_mode = false
+	timer_off = false
 	active_announcement_text = ""
 	active_announcement_until = 0.0
 	tick_count = 0

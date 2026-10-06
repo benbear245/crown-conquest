@@ -139,7 +139,7 @@ static func boat_plan(sim: Simulation, p: Player) -> Dictionary:
 			continue
 		if ow > 0 and ow != GameState.RUINS_OWNER_ID:
 			var e: Player = state.get_player(ow)
-			if e == null or TrucesOps.has_truce(p, ow, state.match_time) or e.troops / float(maxi(e.land, 1)) > 2.0:
+			if e == null or TrucesOps.at_peace(p, ow, state.match_time) or e.troops / float(maxi(e.land, 1)) > 2.0:
 				continue
 		if BoatsOps.launch_block_reason(sim, p, port.x, port.y, x, y, path) == "":
 			var m: Dictionary = BotMoves.move("boat", 0.0, ti, ow)

@@ -1,10 +1,16 @@
 class_name EndOverlay
 extends ColorRect
 
-# Victory / defeat screen with stats, Play again and Watch. After "Watch" it
-# stays hidden until a new ending event (or a new match).
+# Victory / defeat screen with stats, Play again, Watch and Main menu. After
+# "Watch" it stays hidden until a new ending event (or a new match).
 
 signal play_again_pressed
+signal menu_pressed
+
+# Extra line under the stats (the Daily Challenge score). Set by game.gd.
+var extra_text: String = ""
+var _extra: Label
+var _again: Button
 
 var _sim: Simulation
 var _title: Label
@@ -14,7 +20,7 @@ var _dismissed_id: int = -1
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	color = Color(0, 0, 0, 0.55)
 	visible = false
 	var center := CenterContainer.new()
@@ -37,18 +43,26 @@ func _ready() -> void:
 	_stats = UIStyle.label("", 18)
 	_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_stats)
+	_extra = UIStyle.label("", 22, UIStyle.COLOR_WARN)
+	_extra.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_extra.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(_extra)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
 	vbox.add_child(row)
-	var again := UIStyle.button("Play again", 170)
-	again.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	again.pressed.connect(func() -> void: play_again_pressed.emit())
-	row.add_child(again)
+	_again = UIStyle.button("Play again", 170)
+	_again.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_again.pressed.connect(func() -> void: play_again_pressed.emit())
+	row.add_child(_again)
 	var watch := UIStyle.button("Watch", 170)
 	watch.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	watch.pressed.connect(func() -> void: _dismissed_id = _current_id())
 	row.add_child(watch)
+	var menu := UIStyle.button("Main menu", 170)
+	menu.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	menu.pressed.connect(func() -> void: menu_pressed.emit())
+	row.add_child(menu)
 
 
 func setup(sim: Simulation) -> void:
@@ -57,6 +71,7 @@ func setup(sim: Simulation) -> void:
 
 func reset() -> void:
 	_dismissed_id = -1
+	extra_text = ""
 
 
 # A different id per ending situation, so a new event re-shows the overlay.
@@ -83,15 +98,24 @@ func update_view() -> void:
 	visible = true
 	var title: String = "Defeated"
 	var subtitle: String = "Your Crown has fallen — you can watch the rest of the match."
+	var ally: Player = _sim.ally_of(me)
+	if ally != null and ally.is_alive:
+		subtitle = "Your Crown has fallen — your ally %s fights on." % ally.display_name
 	if state.phase == Balance.PHASE_ENDED:
 		subtitle = state.win_reason
-		if state.winner_id == _sim.local_player_id:
-			title = "Victory!"
+		if _sim.local_won():
+			title = "Your team wins!" if state.teams_mode else "Victory!"
 		elif state.winner_id == 0:
 			title = "Match ended"
+		elif state.teams_mode:
+			title = "Team %s wins" % _sim.team_name(state.winner_team)
 		else:
 			var w: Player = state.get_player(state.winner_id)
 			title = "%s wins" % (w.display_name if w != null else "Someone")
+	var daily: bool = _sim.config != null and _sim.config.mode == MatchConfig.Mode.DAILY
+	_again.text = "Try again" if daily else "Play again"
+	_extra.text = extra_text
+	_extra.visible = extra_text != ""
 	_title.text = title
 	_subtitle.text = subtitle
 	var peak_pct: float = 0.0
