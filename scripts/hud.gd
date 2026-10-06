@@ -18,6 +18,13 @@ const LEADERBOARD_WIDTH: int = 260
 signal new_map_pressed
 signal play_again_pressed
 signal jump_to_crown_pressed
+signal build_fort_requested(x: int, y: int)
+signal upgrade_fort_requested(x: int, y: int)
+signal build_barracks_requested(x: int, y: int)
+signal build_port_requested(x: int, y: int)
+signal buy_keep_requested(level: int)
+signal wall_mode_toggled(enabled: bool)
+signal boat_launch_requested(port_x: int, port_y: int)
 
 var _sim: Simulation
 var _state: GameState
@@ -46,6 +53,23 @@ var _end_stats: Label
 var _end_play_again: Button
 var _end_watch: Button
 
+# Context build menu (long-press target tile).
+var _build_menu: PanelContainer
+var _build_menu_vbox: VBoxContainer
+var _build_menu_tile_label: Label
+var _build_menu_tile: Vector2i = Vector2i(-1, -1)
+var _build_menu_buttons: Array = []
+var _wall_mode: bool = false
+var _wall_mode_label: Label
+
+# Keep upgrade panel (tap Crown).
+var _keep_panel: PanelContainer
+var _keep_vbox: VBoxContainer
+var _keep_buttons: Array = []
+
+# Status row above the slider (building counts + wall/boat mode banner).
+var _status_label: Label
+
 
 func _ready() -> void:
 	layer = 10
@@ -56,6 +80,8 @@ func _ready() -> void:
 	_build_alerts()
 	_build_bottom()
 	_build_end_overlay()
+	_build_build_menu()
+	_build_keep_panel()
 
 
 func setup(sim: Simulation) -> void:
@@ -607,3 +633,270 @@ func _set_fraction(frac: float) -> void:
 
 func _update_slider_label() -> void:
 	_slider_label.text = "Send %d%%" % int(round(_send_fraction * 100.0))
+
+
+# --- Build menu --------------------------------------------------------------
+
+func _build_build_menu() -> void:
+	_build_menu = PanelContainer.new()
+	_build_menu.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	_build_menu.offset_left = 24
+	_build_menu.offset_top = -180
+	_build_menu.offset_right = 300
+	_build_menu.offset_bottom = 220
+	_build_menu.visible = false
+	add_child(_build_menu)
+
+	_build_menu_vbox = VBoxContainer.new()
+	_build_menu_vbox.add_theme_constant_override("separation", 6)
+	_build_menu.add_child(_build_menu_vbox)
+
+	_build_menu_tile_label = Label.new()
+	_build_menu_tile_label.text = "Build"
+	_apply_label_style(_build_menu_tile_label)
+	_build_menu_tile_label.add_theme_font_size_override("font_size", 18)
+	_build_menu_vbox.add_child(_build_menu_tile_label)
+
+	# 6 slots so we can re-use rows for Fort / Fort II / Barracks / Port / Wall-mode / Boat / Close.
+	for i in range(7):
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(260, 40)
+		btn.visible = false
+		_build_menu_vbox.add_child(btn)
+		_build_menu_buttons.append(btn)
+
+	_wall_mode_label = Label.new()
+	_apply_label_style(_wall_mode_label)
+	_wall_mode_label.text = ""
+	_wall_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wall_mode_label.anchor_left = 0.0
+	_wall_mode_label.anchor_right = 1.0
+	_wall_mode_label.anchor_top = 1.0
+	_wall_mode_label.anchor_bottom = 1.0
+	_wall_mode_label.offset_top = -(Balance.MIN_BUTTON_PX + 70)
+	_wall_mode_label.offset_bottom = -(Balance.MIN_BUTTON_PX + 40)
+	_wall_mode_label.add_theme_font_size_override("font_size", 18)
+	_wall_mode_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_wall_mode_label)
+
+
+func _build_keep_panel() -> void:
+	_keep_panel = PanelContainer.new()
+	_keep_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_keep_panel.offset_left = -180
+	_keep_panel.offset_right = 180
+	_keep_panel.offset_top = -140
+	_keep_panel.offset_bottom = 140
+	_keep_panel.visible = false
+	add_child(_keep_panel)
+
+	_keep_vbox = VBoxContainer.new()
+	_keep_vbox.add_theme_constant_override("separation", 10)
+	_keep_panel.add_child(_keep_vbox)
+
+	var header := Label.new()
+	header.text = "Keep upgrades"
+	_apply_label_style(header)
+	header.add_theme_font_size_override("font_size", 22)
+	_keep_vbox.add_child(header)
+
+	for i in range(3):
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(300, 40)
+		var lvl: int = i + 1
+		btn.pressed.connect(func() -> void: _on_keep_pressed(lvl))
+		_keep_vbox.add_child(btn)
+		_keep_buttons.append(btn)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(300, 40)
+	close_btn.pressed.connect(func() -> void: _keep_panel.visible = false)
+	_keep_vbox.add_child(close_btn)
+
+
+func open_build_menu(tile_x: int, tile_y: int) -> void:
+	if _sim == null or _state == null:
+		return
+	var local: Player = _local_player()
+	if local == null or not local.is_alive:
+		return
+	var ti: int = _state.idx(tile_x, tile_y)
+	if _state.owners[ti] != _sim.local_player_id:
+		return
+	_build_menu_tile = Vector2i(tile_x, tile_y)
+	_build_menu_tile_label.text = "Build at (%d, %d)   troops %d" % [tile_x, tile_y, int(local.troops)]
+	_populate_build_buttons(local, ti)
+	_build_menu.visible = true
+
+
+func close_build_menu() -> void:
+	_build_menu.visible = false
+	_build_menu_tile = Vector2i(-1, -1)
+
+
+func is_build_menu_open() -> bool:
+	return _build_menu != null and _build_menu.visible
+
+
+func wall_mode_active() -> bool:
+	return _wall_mode
+
+
+func set_wall_mode(enabled: bool) -> void:
+	_wall_mode = enabled
+	_wall_mode_label.text = "Wall mode ON — tap or drag your land to build walls (tap again to cancel)" if enabled else ""
+
+
+func _populate_build_buttons(local: Player, ti: int) -> void:
+	for btn: Button in _build_menu_buttons:
+		btn.visible = false
+		for c in btn.pressed.get_connections():
+			btn.pressed.disconnect(c.callable)
+	var pos: Vector2i = _build_menu_tile
+	var is_port_here: bool = false
+	var is_fort_here: bool = false
+	if _state.building_at_tile.has(ti):
+		var b: Building = _state.building_at_tile[ti]
+		if b.owner_id == local.id:
+			is_port_here = b.type == Balance.BUILDING_PORT
+			is_fort_here = b.type == Balance.BUILDING_FORT
+	var buildable: bool = BuildingsOps.tile_is_buildable(_sim, local.id, ti)
+	var row := 0
+	# Fort or Fort II.
+	if is_fort_here:
+		var ub: Button = _build_menu_buttons[row]; row += 1
+		ub.visible = true
+		var afford: bool = local.troops >= Balance.FORT2_COST
+		ub.text = "Upgrade to Fort II  %d%s" % [int(Balance.FORT2_COST), "" if afford else "  (need %d)" % int(Balance.FORT2_COST)]
+		ub.disabled = not afford
+		ub.pressed.connect(func() -> void: _on_upgrade_fort(pos.x, pos.y))
+	elif buildable:
+		var fb: Button = _build_menu_buttons[row]; row += 1
+		fb.visible = true
+		var fc: float = BuildingsOps.fort_cost_for(local)
+		var afford2: bool = local.troops >= fc and local.fort_count < Balance.FORT_LIMIT
+		fb.text = "Fort  %d  (%d/%d)" % [int(fc), local.fort_count, Balance.FORT_LIMIT]
+		fb.disabled = not afford2
+		fb.pressed.connect(func() -> void: _on_build_fort(pos.x, pos.y))
+	# Barracks.
+	if buildable and _state.match_time >= Balance.BARRACKS_UNLOCK_SEC:
+		var bb: Button = _build_menu_buttons[row]; row += 1
+		bb.visible = true
+		var bc: float = BuildingsOps.barracks_cost_for(local)
+		var afford3: bool = local.troops >= bc and local.barracks_count < Balance.BARRACKS_LIMIT
+		bb.text = "Barracks  %d  (+10%% cap, %d/%d)" % [int(bc), local.barracks_count, Balance.BARRACKS_LIMIT]
+		bb.disabled = not afford3
+		bb.pressed.connect(func() -> void: _on_build_barracks(pos.x, pos.y))
+	# Port (touches water).
+	if buildable and _tile_touches_water(ti):
+		var pb: Button = _build_menu_buttons[row]; row += 1
+		pb.visible = true
+		var afford4: bool = local.troops >= Balance.PORT_COST and local.port_count < Balance.PORT_LIMIT
+		pb.text = "Port  %d  (%d/%d)" % [int(Balance.PORT_COST), local.port_count, Balance.PORT_LIMIT]
+		pb.disabled = not afford4
+		pb.pressed.connect(func() -> void: _on_build_port(pos.x, pos.y))
+	# Wall mode toggle.
+	var wb: Button = _build_menu_buttons[row]; row += 1
+	wb.visible = true
+	wb.text = "Wall mode OFF  (4/tile)" if not _wall_mode else "Wall mode ON — tap again to cancel"
+	wb.disabled = false
+	wb.pressed.connect(func() -> void: _on_wall_mode_pressed())
+	# Launch boat (only if a Port here).
+	if is_port_here:
+		var lb: Button = _build_menu_buttons[row]; row += 1
+		lb.visible = true
+		lb.text = "Launch boat — then tap target"
+		lb.disabled = false
+		lb.pressed.connect(func() -> void: _on_launch_boat_pressed(pos.x, pos.y))
+	# Close.
+	var cb: Button = _build_menu_buttons[row]; row += 1
+	cb.visible = true
+	cb.text = "Close"
+	cb.disabled = false
+	cb.pressed.connect(func() -> void: close_build_menu())
+
+
+func _tile_touches_water(ti: int) -> bool:
+	var pos := _state.idx_to_xy(ti)
+	for off in Simulation.NEIGHBOR_OFFSETS:
+		var nx: int = pos.x + off.x
+		var ny: int = pos.y + off.y
+		if not _state.in_bounds(nx, ny):
+			continue
+		if _state.terrain[_state.idx(nx, ny)] == Balance.TERRAIN_WATER:
+			return true
+	return false
+
+
+func _on_build_fort(x: int, y: int) -> void:
+	build_fort_requested.emit(x, y)
+	close_build_menu()
+
+
+func _on_upgrade_fort(x: int, y: int) -> void:
+	upgrade_fort_requested.emit(x, y)
+	close_build_menu()
+
+
+func _on_build_barracks(x: int, y: int) -> void:
+	build_barracks_requested.emit(x, y)
+	close_build_menu()
+
+
+func _on_build_port(x: int, y: int) -> void:
+	build_port_requested.emit(x, y)
+	close_build_menu()
+
+
+func _on_wall_mode_pressed() -> void:
+	set_wall_mode(not _wall_mode)
+	wall_mode_toggled.emit(_wall_mode)
+	close_build_menu()
+
+
+func _on_launch_boat_pressed(port_x: int, port_y: int) -> void:
+	boat_launch_requested.emit(port_x, port_y)
+	close_build_menu()
+
+
+func _on_keep_pressed(level: int) -> void:
+	buy_keep_requested.emit(level)
+
+
+func open_keep_panel() -> void:
+	if _sim == null:
+		return
+	var local: Player = _local_player()
+	if local == null or local.crown_x < 0 or not local.is_alive:
+		return
+	for i in range(_keep_buttons.size()):
+		var btn: Button = _keep_buttons[i]
+		var lvl: int = i + 1
+		var cost: float = Balance.KEEP_COST[lvl]
+		var unlocked: bool = _state.match_time >= Balance.KEEP_UNLOCK_SEC[lvl]
+		var owned: bool = local.keep_level >= lvl
+		var is_next: bool = local.keep_level + 1 == lvl
+		var afford: bool = local.troops >= cost
+		if owned:
+			btn.text = "Keep %d — owned" % lvl
+			btn.disabled = true
+		elif not unlocked:
+			btn.text = "Keep %d — unlocks at %s" % [lvl, HUD.format_time(Balance.KEEP_UNLOCK_SEC[lvl])]
+			btn.disabled = true
+		elif not is_next:
+			btn.text = "Keep %d — buy earlier levels first" % lvl
+			btn.disabled = true
+		else:
+			btn.text = "Keep %d  %d troops   %s" % [lvl, int(cost), ("" if afford else "(need %d)" % int(cost))]
+			btn.disabled = not afford
+	_keep_panel.visible = true
+
+
+func close_keep_panel() -> void:
+	if _keep_panel != null:
+		_keep_panel.visible = false
+
+
+func is_keep_panel_open() -> bool:
+	return _keep_panel != null and _keep_panel.visible

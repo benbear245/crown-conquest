@@ -70,9 +70,11 @@ func advance_tick() -> void:
 			_apply_growth()
 			_apply_expansions()
 			_tick_attacks()
+			_tick_boats()
 			if not headless:
 				_tick_flashes()
 				_check_crown_alerts()
+				_tick_loot_popups()
 			_tick_bots()
 			_check_win_conditions()
 	state.tick_count += 1
@@ -168,28 +170,49 @@ func _attack_tile_cost(tile_idx: int, d_ratio: float) -> float:
 	return Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_def * extra_def
 
 
-# Non-terrain defense: Crown tile and zone, plus Fort / Wall (Prompt 8).
+# Non-terrain defense: Crown tile and zone, plus Fort and Wall.
 # Crown tiles ignore the x4 building cap. Final Siege weakens Crown tiles
-# and disables the zone bonus.
+# and disables the zone bonus and Keep upgrades.
 func combined_defense_at(tile_idx: int) -> float:
 	var owner: int = state.owners[tile_idx]
 	if owner <= 0 or owner == GameState.RUINS_OWNER_ID:
 		return 1.0
 	var is_siege: bool = state.is_final_siege()
+	var owner_player: Player = state.get_player(owner)
+	# Crown tile: its own defense, ignores the x4 cap and other buildings.
 	if state.crown_tiles.has(tile_idx) and state.crown_tiles[tile_idx] == owner:
 		if is_siege:
 			return Balance.FINAL_SIEGE_CROWN_TILE_DEFENSE
+		if owner_player != null:
+			return owner_player.crown_tile_defense()
 		return Balance.CROWN_TILE_DEFENSE
 	var def: float = 1.0
-	if not is_siege:
-		var p: Player = state.get_player(owner)
-		if p != null and p.crown_x >= 0:
-			var pos: Vector2i = state.idx_to_xy(tile_idx)
-			var dx: int = pos.x - p.crown_x
-			var dy: int = pos.y - p.crown_y
-			if dx * dx + dy * dy <= Balance.CROWN_ZONE_RADIUS * Balance.CROWN_ZONE_RADIUS:
-				def *= Balance.CROWN_ZONE_DEFENSE
-	# Fort / Wall land in Prompt 8; both multiply in here, then cap.
+	if not is_siege and owner_player != null and owner_player.crown_x >= 0:
+		var pos: Vector2i = state.idx_to_xy(tile_idx)
+		var dx: int = pos.x - owner_player.crown_x
+		var dy: int = pos.y - owner_player.crown_y
+		var r: int = owner_player.crown_zone_radius()
+		if dx * dx + dy * dy <= r * r:
+			def *= owner_player.crown_zone_defense()
+	# Fort coverage: max of all this player's Forts whose radius covers the tile.
+	if owner_player != null and owner_player.fort_tiles.size() > 0:
+		var pos: Vector2i = state.idx_to_xy(tile_idx)
+		var best_fort: float = 1.0
+		for ft_idx: int in owner_player.fort_tiles:
+			var b: Building = state.building_at_tile.get(ft_idx, null)
+			if b == null or b.owner_id != owner:
+				continue
+			var r: int = b.radius()
+			var fdx: int = pos.x - b.x
+			var fdy: int = pos.y - b.y
+			if fdx * fdx + fdy * fdy <= r * r:
+				var m: float = b.defense_mult()
+				if m > best_fort:
+					best_fort = m
+		def *= best_fort
+	# Wall tile?
+	if state.wall_tiles.has(tile_idx) and state.wall_tiles[tile_idx] == owner:
+		def *= Balance.WALL_DEFENSE
 	return minf(def, Balance.BUILDING_DEFENSE_CAP)
 
 
@@ -279,6 +302,32 @@ func _eliminate_player(victim_id: int, capturer_id: int) -> void:
 	victim.border.clear()
 	victim.land = 0
 	victim.gem_tiles = 0
+	# Destroy all the victim's buildings and walls (land is Ruins now; no loot).
+	var vb_idx := 0
+	while vb_idx < state.buildings.size():
+		var b: Building = state.buildings[vb_idx]
+		if b.owner_id == victim_id:
+			state.building_at_tile.erase(b.tile_idx)
+			state.buildings.remove_at(vb_idx)
+			continue
+		vb_idx += 1
+	var wall_keys: Array = state.wall_tiles.keys()
+	for wk in wall_keys:
+		if state.wall_tiles[wk] == victim_id:
+			state.wall_tiles.erase(wk)
+	victim.fort_count = 0
+	victim.barracks_count = 0
+	victim.port_count = 0
+	victim.wall_count = 0
+	victim.fort_tiles = PackedInt32Array()
+	# Drop any boats the victim had and any targeting them.
+	var bo_idx := 0
+	while bo_idx < state.boats.size():
+		var bo: Boat = state.boats[bo_idx]
+		if bo.owner_id == victim_id:
+			state.boats.remove_at(bo_idx)
+			continue
+		bo_idx += 1
 	# End every attack involving the dead player.
 	_end_attacks_touching(victim_id)
 	_rebuild_borders_for_all()
@@ -657,8 +706,63 @@ func _claim_tile(player_id: int, x: int, y: int) -> void:
 	var prev: int = state.owners[i]
 	if prev == player_id:
 		return
+	# Destroy any building/wall the previous owner had here; the capturer
+	# gets 25% of its cost as loot.
+	if prev > 0 and prev != GameState.RUINS_OWNER_ID:
+		_destroy_building_at(i, prev, player_id)
+		_destroy_wall_at(i, prev, player_id)
 	state.set_owner_idx(i, player_id)
 	_update_borders_on_change(i, prev, player_id)
+
+
+func _destroy_building_at(tile_idx: int, old_owner: int, capturer_id: int) -> void:
+	var b: Building = state.building_at_tile.get(tile_idx, null)
+	if b == null or b.owner_id != old_owner:
+		return
+	state.building_at_tile.erase(tile_idx)
+	for idx in range(state.buildings.size()):
+		if state.buildings[idx] == b:
+			state.buildings.remove_at(idx)
+			break
+	var old_p: Player = state.get_player(old_owner)
+	if old_p != null:
+		match b.type:
+			Balance.BUILDING_FORT, Balance.BUILDING_FORT2:
+				old_p.fort_count = maxi(0, old_p.fort_count - 1)
+				_remove_from_packed(old_p, tile_idx)
+			Balance.BUILDING_BARRACKS:
+				old_p.barracks_count = maxi(0, old_p.barracks_count - 1)
+			Balance.BUILDING_PORT:
+				old_p.port_count = maxi(0, old_p.port_count - 1)
+	var cap_p: Player = state.get_player(capturer_id)
+	if cap_p != null:
+		var loot: float = b.cost() * Balance.CAPTURED_BUILDING_LOOT_FRACTION
+		cap_p.troops += loot
+		if not headless:
+			state.loot_popups[tile_idx] = {"owner_id": capturer_id, "amount": int(loot), "until": state.match_time + 1.6}
+
+
+func _destroy_wall_at(tile_idx: int, old_owner: int, capturer_id: int) -> void:
+	if not state.wall_tiles.has(tile_idx):
+		return
+	if state.wall_tiles[tile_idx] != old_owner:
+		return
+	state.wall_tiles.erase(tile_idx)
+	var old_p: Player = state.get_player(old_owner)
+	if old_p != null:
+		old_p.wall_count = maxi(0, old_p.wall_count - 1)
+	var cap_p: Player = state.get_player(capturer_id)
+	if cap_p != null:
+		var loot: float = Balance.WALL_COST_PER_TILE * Balance.CAPTURED_BUILDING_LOOT_FRACTION
+		cap_p.troops += loot
+
+
+func _remove_from_packed(p: Player, tile_idx: int) -> void:
+	var out := PackedInt32Array()
+	for v in p.fort_tiles:
+		if v != tile_idx:
+			out.append(v)
+	p.fort_tiles = out
 
 
 func _update_borders_on_change(i: int, from_owner: int, to_owner: int) -> void:
@@ -717,3 +821,125 @@ func _tile_touches_player(x: int, y: int, player_id: int) -> bool:
 		if state.owners[state.idx(nx, ny)] == player_id:
 			return true
 	return false
+
+
+# --- Building and Keep commands (thin wrappers around BuildingsOps) ---------
+
+func player_build_fort(player_id: int, x: int, y: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BuildingsOps.build_fort(self, p, x, y)
+
+
+func player_upgrade_fort(player_id: int, x: int, y: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BuildingsOps.upgrade_fort(self, p, x, y)
+
+
+func player_build_barracks(player_id: int, x: int, y: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BuildingsOps.build_barracks(self, p, x, y)
+
+
+func player_build_port(player_id: int, x: int, y: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BuildingsOps.build_port(self, p, x, y)
+
+
+func player_build_wall(player_id: int, x: int, y: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BuildingsOps.build_wall(self, p, x, y)
+
+
+func player_buy_keep(player_id: int, level: int) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BuildingsOps.buy_keep(self, p, level)
+
+
+func player_launch_boat(player_id: int, port_x: int, port_y: int,
+		target_x: int, target_y: int, fraction: float) -> bool:
+	if state.phase != Balance.PHASE_MATCH:
+		return false
+	var p: Player = state.get_player(player_id)
+	if p == null or not p.is_alive:
+		return false
+	return BoatsOps.try_launch(self, p, port_x, port_y, target_x, target_y, fraction)
+
+
+# --- Boats and loot popups ---------------------------------------------------
+
+func _tick_boats() -> void:
+	if state.boats.is_empty():
+		return
+	BoatsOps.tick(self)
+
+
+func boat_land(b: Boat) -> void:
+	var p: Player = state.get_player(b.owner_id)
+	if p == null or not p.is_alive:
+		return
+	var tx: int = b.landing_tile_x
+	var ty: int = b.landing_tile_y
+	if not state.in_bounds(tx, ty):
+		return
+	var ti: int = state.idx(tx, ty)
+	# Pay to claim the landing tile. If troops short, boat is lost.
+	var terrain_cost: float = _claim_cost_idx(ti, state.owners[ti])
+	if state.owners[ti] > 0 and state.owners[ti] != GameState.RUINS_OWNER_ID:
+		# Enemy: boat opens an attack from this landing tile.
+		var defender: Player = state.get_player(state.owners[ti])
+		if defender == null or not defender.is_alive:
+			return
+		if active_attack_count(p.id) >= Balance.MAX_SIMULTANEOUS_ATTACKS:
+			return
+		var atk := Attack.new()
+		atk.attacker_id = p.id
+		atk.defender_id = defender.id
+		atk.troops_remaining = b.troops
+		atk.front = {ti: true}
+		atk.advance_timer = Balance.ATTACK_RING_INTERVAL_SEC
+		state.attacks.append(atk)
+		return
+	if b.troops < terrain_cost:
+		return
+	b.troops -= terrain_cost
+	_claim_tile(p.id, tx, ty)
+	# Rest of troops roll into the player's expansion bucket.
+	p.expansion_troops += b.troops
+	if p.expansion_timer <= 0.0:
+		p.expansion_timer = Balance.EXPANSION_RING_INTERVAL_SEC
+
+
+func _tick_loot_popups() -> void:
+	if state.loot_popups.is_empty():
+		return
+	var expired: Array = []
+	for k in state.loot_popups.keys():
+		var info: Dictionary = state.loot_popups[k]
+		if state.match_time >= float(info["until"]):
+			expired.append(k)
+	for k in expired:
+		state.loot_popups.erase(k)

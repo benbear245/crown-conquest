@@ -157,6 +157,12 @@ const BOAT_SPEED_TILES_PER_SEC: float = 8.0
 const BUILD_MIN_DIST_FROM_ENEMY: int = 3
 const CAPTURED_BUILDING_LOOT_FRACTION: float = 0.25
 
+# Building type ids. Stored on each Building record. Walls live separately.
+const BUILDING_FORT: int = 0
+const BUILDING_FORT2: int = 1
+const BUILDING_BARRACKS: int = 2
+const BUILDING_PORT: int = 3
+
 # --- Abilities ----------------------------------------------------------------
 const SWIFT_MARCH_UNLOCK_SEC: float = 0.0
 const SWIFT_MARCH_COST: float = 0.0

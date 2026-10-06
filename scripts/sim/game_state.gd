@@ -36,6 +36,17 @@ var attacks: Array = []
 # Recently captured tile idx -> absolute match_time when flash expires.
 var flash_tiles: Dictionary = {}
 
+# All standing structures. Walls live in wall_tiles instead because they're
+# single-tile features without a radius.
+var buildings: Array = []                      # Array[Building]
+var wall_tiles: Dictionary = {}                # tile_idx -> owner_id
+# Fast lookup: tile_idx -> Building for the Fort/Fort II/Barracks/Port stamped there.
+var building_at_tile: Dictionary = {}
+# Active boats (all players).
+var boats: Array = []                          # Array[Boat]
+# Floating "+N loot" numbers for the HUD. tile_idx -> {owner_id, amount, until}.
+var loot_popups: Dictionary = {}
+
 # End-of-match outcome, set by Simulation._end_match.
 var winner_id: int = 0
 var win_reason: String = ""
@@ -63,6 +74,11 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	crown_centres.clear()
 	attacks = []
 	flash_tiles.clear()
+	buildings = []
+	wall_tiles.clear()
+	building_at_tile.clear()
+	boats = []
+	loot_popups.clear()
 	winner_id = 0
 	win_reason = ""
 	active_announcement_text = ""

@@ -10,7 +10,80 @@ static func tick(sim: Simulation, player: Player) -> void:
 	if player.think_timer > 0.0:
 		return
 	player.think_timer = _think_interval(player.difficulty, sim.state.rng)
+	# Normal/Hard bots occasionally spend troops on buildings/Keep upgrades.
+	if player.difficulty >= Balance.BOT_DIFFICULTY_NORMAL:
+		if _try_buy_keep(sim, player):
+			return
+		if _try_build_barracks(sim, player):
+			return
+		if _try_build_fort(sim, player):
+			return
 	_basic_expand(sim, player)
+
+
+static func _try_build_fort(sim: Simulation, player: Player) -> bool:
+	if player.fort_count >= Balance.FORT_LIMIT:
+		return false
+	var cost: float = BuildingsOps.fort_cost_for(player)
+	if player.troops < cost * 1.3:
+		return false
+	# Only Hard bots upgrade Forts aggressively.
+	var tile: int = _pick_safe_build_tile(sim, player)
+	if tile < 0:
+		return false
+	var pos := sim.state.idx_to_xy(tile)
+	return sim.player_build_fort(player.id, pos.x, pos.y)
+
+
+static func _try_build_barracks(sim: Simulation, player: Player) -> bool:
+	if sim.state.match_time < Balance.BARRACKS_UNLOCK_SEC:
+		return false
+	if player.barracks_count >= Balance.BARRACKS_LIMIT:
+		return false
+	var cost: float = BuildingsOps.barracks_cost_for(player)
+	if player.troops < cost * 1.3:
+		return false
+	var tile: int = _pick_safe_build_tile(sim, player)
+	if tile < 0:
+		return false
+	var pos := sim.state.idx_to_xy(tile)
+	return sim.player_build_barracks(player.id, pos.x, pos.y)
+
+
+static func _try_buy_keep(sim: Simulation, player: Player) -> bool:
+	var next: int = player.keep_level + 1
+	if next >= Balance.KEEP_COST.size():
+		return false
+	if sim.state.match_time < Balance.KEEP_UNLOCK_SEC[next]:
+		return false
+	var c: float = Balance.KEEP_COST[next]
+	if player.troops < c * 1.5:
+		return false
+	return sim.player_buy_keep(player.id, next)
+
+
+# Picks a random interior tile of the player (not touching enemy border) that
+# is far enough from the enemy for building. Returns -1 if nothing is safe.
+static func _pick_safe_build_tile(sim: Simulation, player: Player) -> int:
+	var state: GameState = sim.state
+	if player.border.size() == 0:
+		return -1
+	var crown_i: int = state.crown_centres.get(player.id, -1)
+	# Try tiles around the Crown, which are usually furthest from the enemy border.
+	if crown_i < 0:
+		return -1
+	var cpos := state.idx_to_xy(crown_i)
+	for _attempt in range(12):
+		var dx: int = state.rng.randi_range(-6, 6)
+		var dy: int = state.rng.randi_range(-6, 6)
+		var x: int = cpos.x + dx
+		var y: int = cpos.y + dy
+		if not state.in_bounds(x, y):
+			continue
+		var ti: int = state.idx(x, y)
+		if BuildingsOps.tile_is_buildable(sim, player.id, ti):
+			return ti
+	return -1
 
 
 static func _think_interval(difficulty: int, rng: RandomNumberGenerator) -> float:

@@ -65,12 +65,35 @@ func _base_color_for_tile(i: int) -> Color:
 			if i == centre:
 				return Color(0.98, 0.86, 0.22)
 			return Balance.color_for_player(crown_owner).lightened(0.35)
+	# Wall tile: dark stripe on top of the owner tint.
+	if _state.wall_tiles.has(i) and owner_id == _state.wall_tiles[i]:
+		return Color(0.08, 0.08, 0.10)
+	# Building marker tile: strong tint by building type.
+	if _state.building_at_tile.has(i):
+		var b: Building = _state.building_at_tile[i]
+		if b.owner_id == owner_id:
+			return _building_color(b, owner_id)
 	if owner_id == 0:
 		return terrain_color
 	if owner_id == GameState.RUINS_OWNER_ID:
 		return Balance.RUINS_COLOR.lerp(terrain_color, Balance.OWNER_TERRAIN_TINT)
 	var owner_color := Balance.color_for_player(owner_id)
 	return owner_color.lerp(terrain_color, Balance.OWNER_TERRAIN_TINT)
+
+
+func _building_color(b: Building, owner_id: int) -> Color:
+	var owner_color := Balance.color_for_player(owner_id)
+	match b.type:
+		Balance.BUILDING_FORT:
+			return owner_color.darkened(0.35)
+		Balance.BUILDING_FORT2:
+			return owner_color.darkened(0.55)
+		Balance.BUILDING_BARRACKS:
+			return owner_color.lightened(0.15).lerp(Color(0.75, 0.60, 0.35), 0.4)
+		Balance.BUILDING_PORT:
+			return Color(0.95, 0.95, 1.0).lerp(owner_color, 0.3)
+		_:
+			return owner_color
 
 
 func _terrain_color(t: int) -> Color:

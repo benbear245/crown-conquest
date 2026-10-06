@@ -176,3 +176,29 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - From a terminal in the project directory, run the sim command above. Stdout shows each match's result as it finishes; the full Markdown report prints at the end and is also written to `reports/balance_<date>.md`.
 - The report's PASS/FAIL rows should match the design's targets. For now, median length and crowns-captured will FAIL; the suggestions above explain why.
 - The sim runs the same `scripts/sim/` code as the real game — no sim-only shortcuts, no hidden bot buffs.
+
+## Prompt 8: Buildings and Keep upgrades
+
+**Built**
+- `scripts/sim/building.gd` (`Building`): one record per Fort / Fort II / Barracks / Port with centre tile, type and defense/radius/cost helpers.
+- `scripts/sim/boat.gd` (`Boat`): one in-flight sea unit — owner, troops, water-path, progress, send-fraction, landing tile.
+- `scripts/sim/buildings_ops.gd` (`BuildingsOps`): pure-sim helpers for `build_fort / upgrade_fort / build_barracks / build_port / build_wall / buy_keep` and `tile_is_buildable` (owner check, no-blocked-terrain, no stacking buildings/walls/Crown tiles, and the 3-tile enemy-border buffer).
+- `scripts/sim/boats_ops.gd` (`BoatsOps`): launches a boat (BFS over water tiles from the Port to a water tile adjacent to the target coast, capped at `BOAT_RANGE_TILES`), ticks progress at `BOAT_SPEED_TILES_PER_SEC`, and calls `Simulation.boat_land` when the path finishes.
+- `GameState` extended with `buildings`, `wall_tiles` (tile_idx → owner_id), `building_at_tile` (tile_idx → Building for fast lookup), `boats`, and `loot_popups` (floating "+N loot" numbers for the HUD).
+- `Player` extended with `fort_count`, `fort_tiles`, `barracks_count`, `port_count`, `wall_count`, `keep_level`, plus `troop_cap()` now folds in Barracks (+10% per instance) and Keep 3 (+5%). New helpers `crown_tile_defense()`, `crown_zone_defense()`, `crown_zone_radius()` read from the `KEEP_*` tables.
+- `Simulation.combined_defense_at` now returns the full Fort × Wall × Crown-zone product, capped at ×4, with the Crown-tile defense (ignoring the cap) coming from the owner's Keep level. Final Siege still weakens Crown tiles and disables both the zone bonus and Keep upgrades.
+- Capturing a building/wall tile destroys it immediately, gives the attacker 25 % of the cost as loot, and queues a `loot_popups` entry for the HUD. Eliminating a player wipes all of their buildings/walls/boats so the Ruins field is clean.
+- Thin `Simulation.player_build_fort / upgrade_fort / build_barracks / build_port / build_wall / buy_keep / launch_boat` commands validate the match phase and delegate to the ops helpers (bots call these same methods).
+- `scripts/sim/bots.gd`: Normal/Hard bots occasionally spend troops on Barracks, Forts, and the next Keep upgrade when they have 1.3–1.5× the cost and a safe interior tile (picked near the Crown). Easy bots still only expand/attack.
+- `scripts/map.gd`: Walls paint a dark stripe, Fort/Fort II darken the owner tint (II darker), Barracks tint toward brown, Ports toward white — all overlaid on top of the usual owner/terrain lerp.
+- `scripts/hud.gd`: long-press on your own land opens a build menu with Fort/Fort II (if a Fort is already here), Barracks, Port (when the tile touches water), a Wall-mode toggle and (on a Port tile) Launch boat. Tapping your Crown opens a Keep-upgrade panel (3 buttons, locked/owned/affordable states). Grey-out logic covers cost, limit, 3-tile enemy buffer, and unlock time.
+- `scripts/game.gd`: 0.4 s long-press detection; wall mode routes taps and drags to `player_build_wall` (one tile per new tile dragged over); boat mode captures the next tap as a landing target; tapping on your Crown opens the Keep panel.
+
+**What to check**
+- Long-press your own land. A side panel shows Fort (cost 300), Barracks (if 1:00+ and tile is interior), Port (if the tile touches water), Wall mode toggle, Close. Grey rows mean "can't afford" or "limit reached" or "within 3 of enemy border".
+- Build a Fort, then enemy tile cost near it goes from ~5 to ~8 (plains D=2: 2 + 1.5·2·1·1.6 = 7.8). Upgrade with the "Upgrade to Fort II" row on the same tile (long-press the Fort). Enemy cost jumps to ~8 → ~8.5 (Fort II = ×2.0).
+- Toggle Wall mode and drag along your border — each new tile costs 4 troops and shows a dark stripe. Wall x Fort x Crown zone caps at ×4.
+- Tap your Crown — the Keep panel opens. Buy Keep 1 for 300 (available immediately). Keep 2 unlocks at 3:00, Keep 3 at 6:00; owned shows "owned" and locked shows the unlock time.
+- Build a Port next to the water, then long-press the Port and press Launch boat. The next tap on an unowned/enemy coast within 60 water-tiles sends a boat; the boat lands and either expands (free) or opens an attack (enemy) from the landing tile.
+- Capture an enemy Fort/Wall tile — the loot (25% of cost) shows up in your troop pool; next tick the building is gone.
+- Bots: at Normal/Hard, you should see them stand up Forts and Barracks near their Crowns during the midgame and buy Keep 1/2 when they can afford it.

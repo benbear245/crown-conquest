@@ -36,9 +36,43 @@ var think_timer: float = 0.0
 var crown_alert_until: float = 0.0
 var crowns_captured: int = 0
 
+# Buildings (counts for cost scaling and limit checks).
+var fort_count: int = 0           # includes Fort II (Fort II upgrades count as one Fort)
+var barracks_count: int = 0
+var port_count: int = 0
+var wall_count: int = 0
+
+# Keep upgrade level: 0 base, 1-3 upgraded.
+var keep_level: int = 0
+
+# Fort tile indices this player owns (used for defense lookup, max 6).
+var fort_tiles: PackedInt32Array = PackedInt32Array()
+
 
 func troop_cap() -> float:
-	return Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)
+	var cap: float = Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)
+	cap *= 1.0 + Balance.BARRACKS_TROOP_CAP_BONUS * float(barracks_count)
+	if keep_level >= 3:
+		cap *= 1.0 + Balance.KEEP_3_TROOP_CAP_BONUS
+	return cap
+
+
+func crown_zone_radius() -> int:
+	if keep_level < 0 or keep_level >= Balance.KEEP_ZONE_RADIUS.size():
+		return Balance.CROWN_ZONE_RADIUS
+	return Balance.KEEP_ZONE_RADIUS[keep_level]
+
+
+func crown_zone_defense() -> float:
+	if keep_level < 0 or keep_level >= Balance.KEEP_ZONE_DEF.size():
+		return Balance.CROWN_ZONE_DEFENSE
+	return Balance.KEEP_ZONE_DEF[keep_level]
+
+
+func crown_tile_defense() -> float:
+	if keep_level < 0 or keep_level >= Balance.KEEP_CROWN_TILE_DEF.size():
+		return Balance.CROWN_TILE_DEFENSE
+	return Balance.KEEP_CROWN_TILE_DEF[keep_level]
 
 
 # Growth rate in troops/second at this player's current state. Positive when
