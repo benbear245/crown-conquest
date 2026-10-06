@@ -23,12 +23,17 @@ var _pointer_dragged: bool = false
 var _pointer_press_pos: Vector2 = Vector2.ZERO
 
 
+var _prev_crown_alert: bool = false
+
+
 func _ready() -> void:
 	_simulation = Simulation.new()
 	_simulation.start_default_match(_random_seed())
 	_map.setup(_simulation.state)
 	_hud.setup(_simulation)
 	_hud.new_map_pressed.connect(_on_new_map_pressed)
+	_hud.play_again_pressed.connect(_on_play_again_pressed)
+	_hud.jump_to_crown_pressed.connect(_on_jump_to_crown_pressed)
 	_init_camera()
 
 
@@ -41,6 +46,15 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 	_map.render()
 	_hud.update_from_state()
+	_handle_crown_alert_vibration()
+
+
+func _handle_crown_alert_vibration() -> void:
+	var local: Player = _simulation.state.get_player(_simulation.local_player_id)
+	var active: bool = local != null and local.is_alive and local.crown_alert_until > _simulation.state.match_time
+	if active and not _prev_crown_alert:
+		Input.vibrate_handheld()
+	_prev_crown_alert = active
 
 
 # --- Input ------------------------------------------------------------------
@@ -166,9 +180,27 @@ func _clamp_camera() -> void:
 # --- Debug ------------------------------------------------------------------
 
 func _on_new_map_pressed() -> void:
+	_start_new_match()
+
+
+func _on_play_again_pressed() -> void:
+	_start_new_match()
+
+
+func _on_jump_to_crown_pressed() -> void:
+	var local: Player = _simulation.state.get_player(_simulation.local_player_id)
+	if local == null or local.crown_x < 0:
+		return
+	_camera.position = Vector2(float(local.crown_x) + 0.5, float(local.crown_y) + 0.5)
+	_clamp_camera()
+
+
+func _start_new_match() -> void:
 	var next_seed := _random_seed()
 	_simulation.start_match(_simulation.size_preset, _simulation.map_type, next_seed)
 	_map.setup(_simulation.state)
+	_hud.reset_overlay_dismissal()
+	_prev_crown_alert = false
 	_init_camera()
 
 

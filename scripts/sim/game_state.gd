@@ -36,6 +36,17 @@ var attacks: Array = []
 # Recently captured tile idx -> absolute match_time when flash expires.
 var flash_tiles: Dictionary = {}
 
+# End-of-match outcome, set by Simulation._end_match.
+var winner_id: int = 0
+var win_reason: String = ""
+# Top-of-screen banner shown by the HUD until the expiry.
+var active_announcement_text: String = ""
+var active_announcement_until: float = 0.0
+
+
+func is_final_siege() -> bool:
+	return match_time >= Balance.FINAL_SIEGE_START_SEC
+
 
 func configure(w: int, h: int, match_seed: int) -> void:
 	width = w
@@ -52,6 +63,10 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	crown_centres.clear()
 	attacks = []
 	flash_tiles.clear()
+	winner_id = 0
+	win_reason = ""
+	active_announcement_text = ""
+	active_announcement_until = 0.0
 	tick_count = 0
 	phase = Balance.PHASE_PLACEMENT
 	placement_time_left = Balance.PLACEMENT_PHASE_SEC

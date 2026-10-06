@@ -32,6 +32,10 @@ var expansion_timer: float = 0.0        # seconds until the next ring tick
 # Bot think cadence (ignored for the local player).
 var think_timer: float = 0.0
 
+# HUD alert when an attack enters this player's Crown zone.
+var crown_alert_until: float = 0.0
+var crowns_captured: int = 0
+
 
 func troop_cap() -> float:
 	return Balance.TROOP_CAP_BASE + Balance.TROOP_CAP_PER_LAND * float(land)

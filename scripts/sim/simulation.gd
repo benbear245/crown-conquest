@@ -16,6 +16,7 @@ var state: GameState = GameState.new()
 var map_type: int = Balance.MAP_TYPE_CONTINENT
 var size_preset: int = Balance.MAP_SIZE_MEDIUM
 var local_player_id: int = 1
+var _final_siege_announced: bool = false
 
 
 # --- Match setup -------------------------------------------------------------
@@ -27,6 +28,7 @@ func start_default_match(match_seed: int = 0) -> void:
 func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> void:
 	size_preset = size
 	map_type = mt
+	_final_siege_announced = false
 	var dims := MapGen.dims_for_size(size)
 	state.configure(dims.x, dims.y, match_seed)
 	MapGen.generate(state, mt)
@@ -61,12 +63,24 @@ func advance_tick() -> void:
 			_tick_placement()
 		Balance.PHASE_MATCH:
 			state.match_time += Balance.TICK_DELTA
+			_announce_final_siege_once()
 			_apply_growth()
 			_apply_expansions()
 			_tick_attacks()
 			_tick_flashes()
+			_check_crown_alerts()
 			_tick_bots()
+			_check_win_conditions()
 	state.tick_count += 1
+
+
+func _announce_final_siege_once() -> void:
+	if _final_siege_announced:
+		return
+	if not state.is_final_siege():
+		return
+	_final_siege_announced = true
+	_announce("Final Siege begins — Crowns weaken, plunder doubles.")
 
 
 func _tick_flashes() -> void:
@@ -94,6 +108,9 @@ func _tick_attacks() -> void:
 			continue
 		a.advance_timer += Balance.ATTACK_RING_INTERVAL_SEC
 		_advance_attack(a)
+		# _advance_attack may have removed this attack (defender eliminated).
+		if i >= state.attacks.size() or state.attacks[i] != a:
+			continue
 		if a.troops_remaining <= 0.0 or a.front.is_empty():
 			state.attacks.remove_at(i)
 			continue
@@ -110,18 +127,23 @@ func _advance_attack(a: Attack) -> void:
 	for ni: int in a.front.keys():
 		var cur_owner: int = state.owners[ni]
 		if cur_owner != a.defender_id:
-			continue  # tile moved out of defender's hands already
+			continue
 		if state.is_blocked_terrain(state.terrain[ni]):
 			continue
 		var cost: float = _attack_tile_cost(ni, d_ratio)
 		if a.troops_remaining < cost:
-			new_front[ni] = true   # keep for next ring if we survive
+			new_front[ni] = true
 			continue
 		a.troops_remaining -= cost
 		defender.troops = maxf(0.0, defender.troops - Balance.DEFENDER_LOSS_PER_TILE * d_ratio)
 		var pos: Vector2i = state.idx_to_xy(ni)
+		var was_centre: bool = state.crown_centres.get(a.defender_id, -1) == ni
 		_claim_tile(a.attacker_id, pos.x, pos.y)
 		_mark_flash(ni)
+		if was_centre:
+			_eliminate_player(a.defender_id, a.attacker_id)
+			# Defender is gone; this attack was removed by _end_attacks_against.
+			return
 		for off in NEIGHBOR_OFFSETS:
 			var nx: int = pos.x + off.x
 			var ny: int = pos.y + off.y
@@ -142,11 +164,149 @@ func _attack_tile_cost(tile_idx: int, d_ratio: float) -> float:
 	return Balance.ATTACK_TILE_COST_BASE + Balance.ATTACK_TILE_COST_SCALE * d_ratio * terrain_def * extra_def
 
 
-# Non-terrain defense: Crown tile and zone (Prompt 6) and Fort / Wall (Prompt 8)
-# live here so the attack cost function stays stable. Capped by BUILDING_DEFENSE_CAP
-# everywhere except Crown tiles themselves.
-func combined_defense_at(_tile_idx: int) -> float:
-	return 1.0
+# Non-terrain defense: Crown tile and zone, plus Fort / Wall (Prompt 8).
+# Crown tiles ignore the x4 building cap. Final Siege weakens Crown tiles
+# and disables the zone bonus.
+func combined_defense_at(tile_idx: int) -> float:
+	var owner: int = state.owners[tile_idx]
+	if owner <= 0 or owner == GameState.RUINS_OWNER_ID:
+		return 1.0
+	var is_siege: bool = state.is_final_siege()
+	if state.crown_tiles.has(tile_idx) and state.crown_tiles[tile_idx] == owner:
+		if is_siege:
+			return Balance.FINAL_SIEGE_CROWN_TILE_DEFENSE
+		return Balance.CROWN_TILE_DEFENSE
+	var def: float = 1.0
+	if not is_siege:
+		var p: Player = state.get_player(owner)
+		if p != null and p.crown_x >= 0:
+			var pos: Vector2i = state.idx_to_xy(tile_idx)
+			var dx: int = pos.x - p.crown_x
+			var dy: int = pos.y - p.crown_y
+			if dx * dx + dy * dy <= Balance.CROWN_ZONE_RADIUS * Balance.CROWN_ZONE_RADIUS:
+				def *= Balance.CROWN_ZONE_DEFENSE
+	# Fort / Wall land in Prompt 8; both multiply in here, then cap.
+	return minf(def, Balance.BUILDING_DEFENSE_CAP)
+
+
+# --- Alerts, win conditions, elimination ------------------------------------
+
+func _check_crown_alerts() -> void:
+	if state.attacks.is_empty():
+		return
+	var r2: int = Balance.CROWN_ZONE_RADIUS * Balance.CROWN_ZONE_RADIUS
+	for a: Attack in state.attacks:
+		var defender: Player = state.get_player(a.defender_id)
+		if defender == null or defender.crown_x < 0:
+			continue
+		for ni_v in a.front.keys():
+			var ni: int = ni_v
+			var pos: Vector2i = state.idx_to_xy(ni)
+			var dx: int = pos.x - defender.crown_x
+			var dy: int = pos.y - defender.crown_y
+			if dx * dx + dy * dy <= r2:
+				defender.crown_alert_until = state.match_time + 2.0
+				break
+
+
+func _check_win_conditions() -> void:
+	var alive: Array = []
+	for p: Player in state.players:
+		if p.is_alive:
+			alive.append(p)
+	if alive.size() <= 1:
+		if alive.size() == 1:
+			_end_match((alive[0] as Player).id, "Last Crown standing")
+		else:
+			_end_match(0, "Draw")
+		return
+	var usable: int = state.total_usable_tiles()
+	if usable > 0:
+		for p: Player in alive:
+			if float(p.land) / float(usable) >= Balance.DOMINION_WIN_FRACTION:
+				_end_match(p.id, "Dominion win (60%+ of the usable map)")
+				return
+	if state.match_time >= Balance.MATCH_TIME_LIMIT_SEC:
+		var leader: Player = alive[0]
+		for p: Player in alive:
+			if p.land > leader.land:
+				leader = p
+		_end_match(leader.id, "Most land at the 15:00 limit")
+
+
+func _end_match(winner_id: int, reason: String) -> void:
+	state.phase = Balance.PHASE_ENDED
+	state.winner_id = winner_id
+	state.win_reason = reason
+	state.attacks.clear()
+	if winner_id > 0:
+		var w: Player = state.get_player(winner_id)
+		if w != null:
+			_announce("%s wins! %s" % [w.display_name, reason])
+	else:
+		_announce("Match ends: %s" % reason)
+
+
+func _eliminate_player(victim_id: int, capturer_id: int) -> void:
+	var victim: Player = state.get_player(victim_id)
+	if victim == null or not victim.is_alive:
+		return
+	victim.is_alive = false
+	var plunder_frac: float = Balance.FINAL_SIEGE_PLUNDER_FRACTION if state.is_final_siege() else Balance.CROWN_PLUNDER_FRACTION
+	var plunder: float = victim.troops * plunder_frac
+	victim.troops = 0.0
+	var capturer: Player = state.get_player(capturer_id)
+	if capturer != null:
+		capturer.troops += plunder
+		capturer.crowns_captured += 1
+	# Victim's territory becomes Ruins.
+	for i in range(state.owners.size()):
+		if state.owners[i] == victim_id:
+			state.owners[i] = GameState.RUINS_OWNER_ID
+			state.dirty_tiles[i] = true
+	# Drop the victim's Crown data.
+	var crown_tile_keys: Array = state.crown_tiles.keys()
+	for t_idx_v in crown_tile_keys:
+		var t_idx: int = t_idx_v
+		if state.crown_tiles[t_idx] == victim_id:
+			state.crown_tiles.erase(t_idx)
+			state.dirty_tiles[t_idx] = true
+	state.crown_centres.erase(victim_id)
+	victim.border.clear()
+	victim.land = 0
+	victim.gem_tiles = 0
+	# End every attack involving the dead player.
+	_end_attacks_touching(victim_id)
+	_rebuild_borders_for_all()
+	var capturer_name: String = capturer.display_name if capturer != null else "An attacker"
+	_announce("%s has taken %s's Crown!" % [capturer_name, victim.display_name])
+
+
+func _end_attacks_touching(player_id: int) -> void:
+	var i := 0
+	while i < state.attacks.size():
+		var a: Attack = state.attacks[i]
+		if a.attacker_id == player_id or a.defender_id == player_id:
+			state.attacks.remove_at(i)
+			continue
+		i += 1
+
+
+func _rebuild_borders_for_all() -> void:
+	for p: Player in state.players:
+		p.border.clear()
+	for i in range(state.owners.size()):
+		var ow: int = state.owners[i]
+		var p: Player = state.get_player(ow)
+		if p == null:
+			continue
+		if _tile_is_border(i, ow):
+			p.border[i] = true
+
+
+func _announce(text: String) -> void:
+	state.active_announcement_text = text
+	state.active_announcement_until = state.match_time + 4.0
 
 
 func _mark_flash(tile_idx: int) -> void:

@@ -16,10 +16,13 @@ const LEADERBOARD_ROWS: int = 5
 const LEADERBOARD_WIDTH: int = 260
 
 signal new_map_pressed
+signal play_again_pressed
+signal jump_to_crown_pressed
 
 var _sim: Simulation
 var _state: GameState
 var _send_fraction: float = 0.50
+var _overlay_dismissed_for_phase_id: int = -1
 
 var _bar_bg: ColorRect
 var _bar_fill: ColorRect
@@ -34,6 +37,14 @@ var _placement_msg: Label
 var _leaderboard: VBoxContainer
 var _leader_rows: Array = []
 var _attack_rows: Array = []
+var _alert_button: Button
+var _announcement_label: Label
+var _end_overlay: ColorRect
+var _end_title: Label
+var _end_subtitle: Label
+var _end_stats: Label
+var _end_play_again: Button
+var _end_watch: Button
 
 
 func _ready() -> void:
@@ -42,7 +53,9 @@ func _ready() -> void:
 	_build_leaderboard()
 	_build_attacks()
 	_build_placement_message()
+	_build_alerts()
 	_build_bottom()
+	_build_end_overlay()
 
 
 func setup(sim: Simulation) -> void:
@@ -210,6 +223,119 @@ func _build_attacks() -> void:
 		_attack_rows.append(btn)
 
 
+func _build_alerts() -> void:
+	# Crown-under-attack button, anchored top-centre below the top panel.
+	_alert_button = Button.new()
+	_alert_button.text = "⚠ Crown under attack — tap to jump"
+	_alert_button.anchor_left = 0.5
+	_alert_button.anchor_right = 0.5
+	_alert_button.anchor_top = 0.0
+	_alert_button.anchor_bottom = 0.0
+	_alert_button.offset_left = -220
+	_alert_button.offset_right = 220
+	_alert_button.offset_top = MARGIN + BAR_HEIGHT + 32
+	_alert_button.offset_bottom = _alert_button.offset_top + 44
+	_alert_button.visible = false
+	_alert_button.add_theme_color_override("font_color", Color(1, 0.95, 0.4))
+	_alert_button.pressed.connect(func() -> void: jump_to_crown_pressed.emit())
+	add_child(_alert_button)
+
+	_announcement_label = Label.new()
+	_announcement_label.anchor_left = 0.5
+	_announcement_label.anchor_right = 0.5
+	_announcement_label.anchor_top = 0.0
+	_announcement_label.anchor_bottom = 0.0
+	_announcement_label.offset_left = -340
+	_announcement_label.offset_right = 340
+	_announcement_label.offset_top = MARGIN + BAR_HEIGHT + 86
+	_announcement_label.offset_bottom = _announcement_label.offset_top + 36
+	_announcement_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_announcement_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_apply_label_style(_announcement_label)
+	_announcement_label.add_theme_font_size_override("font_size", 22)
+	_announcement_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_announcement_label.visible = false
+	add_child(_announcement_label)
+
+
+func _build_end_overlay() -> void:
+	_end_overlay = ColorRect.new()
+	_end_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_end_overlay.color = Color(0, 0, 0, 0.55)
+	_end_overlay.visible = false
+	add_child(_end_overlay)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -260
+	panel.offset_right = 260
+	panel.offset_top = -170
+	panel.offset_bottom = 170
+	_end_overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
+
+	_end_title = Label.new()
+	_end_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_label_style(_end_title)
+	_end_title.add_theme_font_size_override("font_size", 42)
+	_end_title.text = ""
+	vbox.add_child(_end_title)
+
+	_end_subtitle = Label.new()
+	_end_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_label_style(_end_subtitle)
+	_end_subtitle.add_theme_font_size_override("font_size", 20)
+	_end_subtitle.text = ""
+	vbox.add_child(_end_subtitle)
+
+	_end_stats = Label.new()
+	_end_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_end_stats.add_theme_font_size_override("font_size", 18)
+	_apply_label_style(_end_stats)
+	_end_stats.text = ""
+	vbox.add_child(_end_stats)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(btn_row)
+
+	_end_play_again = Button.new()
+	_end_play_again.text = "Play again"
+	_end_play_again.custom_minimum_size = Vector2(140, Balance.MIN_BUTTON_PX)
+	_end_play_again.pressed.connect(func() -> void: play_again_pressed.emit())
+	btn_row.add_child(_end_play_again)
+
+	_end_watch = Button.new()
+	_end_watch.text = "Watch"
+	_end_watch.custom_minimum_size = Vector2(140, Balance.MIN_BUTTON_PX)
+	_end_watch.pressed.connect(_on_watch_pressed)
+	btn_row.add_child(_end_watch)
+
+
+func _on_watch_pressed() -> void:
+	_overlay_dismissed_for_phase_id = _current_overlay_id()
+
+
+func _current_overlay_id() -> int:
+	# A unique id per (match-run, event) so that a new match or new elimination
+	# event re-shows the overlay even after a previous "Watch" dismissal.
+	var local: Player = _local_player()
+	var state_id: int = int(_state.match_time * 10.0) if _state != null else 0
+	state_id = _state.winner_id * 100000 if _state != null and _state.phase == Balance.PHASE_ENDED else 0
+	if local != null and not local.is_alive:
+		state_id = state_id | 1
+	return state_id
+
+
+func reset_overlay_dismissal() -> void:
+	_overlay_dismissed_for_phase_id = -1
+
+
 func _build_placement_message() -> void:
 	_placement_msg = Label.new()
 	_placement_msg.set_anchors_preset(Control.PRESET_CENTER)
@@ -294,6 +420,71 @@ func update_from_state() -> void:
 	_update_phase_display()
 	_update_leaderboard()
 	_update_attacks()
+	_update_alerts()
+	_update_announcement()
+	_update_end_overlay()
+
+
+func _update_alerts() -> void:
+	var local: Player = _local_player()
+	if local == null:
+		_alert_button.visible = false
+		return
+	var active: bool = local.is_alive and local.crown_alert_until > _state.match_time
+	_alert_button.visible = active
+
+
+func _update_announcement() -> void:
+	var active: bool = _state.active_announcement_until > _state.match_time
+	_announcement_label.visible = active and _state.active_announcement_text != ""
+	if _announcement_label.visible:
+		_announcement_label.text = _state.active_announcement_text
+
+
+func _update_end_overlay() -> void:
+	var local: Player = _local_player()
+	var overlay_id: int = _current_overlay_id()
+	var should_show: bool = false
+	if _state.phase == Balance.PHASE_ENDED:
+		should_show = true
+	elif local != null and not local.is_alive:
+		should_show = true
+	if not should_show:
+		_end_overlay.visible = false
+		return
+	if overlay_id == _overlay_dismissed_for_phase_id:
+		_end_overlay.visible = false
+		return
+	_end_overlay.visible = true
+	_populate_end_overlay(local)
+
+
+func _populate_end_overlay(local: Player) -> void:
+	var title: String = "Defeated"
+	var subtitle: String = ""
+	if _state.phase == Balance.PHASE_ENDED:
+		if _state.winner_id == _sim.local_player_id:
+			title = "Victory!"
+		elif _state.winner_id == 0:
+			title = "Match ended"
+		else:
+			var w: Player = _state.get_player(_state.winner_id)
+			title = "%s wins" % (w.display_name if w != null else "Someone")
+		subtitle = _state.win_reason
+	else:
+		subtitle = "Your Crown has fallen — you can watch the rest of the match."
+	_end_title.text = title
+	_end_subtitle.text = subtitle
+	var usable: int = _state.total_usable_tiles()
+	var denom: float = float(maxi(usable, 1))
+	var peak_pct: float = 0.0
+	var crowns_captured: int = 0
+	if local != null:
+		peak_pct = 100.0 * float(local.peak_land) / denom
+		crowns_captured = local.crowns_captured
+	_end_stats.text = "Time: %s   Peak land: %.1f%%   Crowns taken: %d" % [
+		format_time(_state.match_time), peak_pct, crowns_captured,
+	]
 
 
 func _update_attacks() -> void:

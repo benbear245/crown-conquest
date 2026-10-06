@@ -109,3 +109,22 @@
 - Bots start attacking once free land near them runs out (usually around the 1:30–3:00 mark); you'll see borders eating into each other across the map.
 - During peace (first minute after placement), attempting to attack is a no-op; the attack list stays empty.
 - Over-cap shrink is visible when a player loses a lot of land fast: their troop bar drops toward the new cap.
+
+## Prompt 6: Crowns and winning
+
+**Built**
+- `combined_defense_at(tile_idx)` now returns the full non-terrain defense: Crown tiles get `CROWN_TILE_DEFENSE` (×3, dropping to ×1.5 in Final Siege) and ignore the ×4 building cap; non-Crown tiles inside the owner's Crown zone (radius 6) multiply ×1.5 (0 during Final Siege). Fort / Wall still hook in later and share the cap.
+- Elimination (`Simulation._eliminate_player`): capturing the Crown's centre tile marks the victim `is_alive = false`, moves 30 % of the victim's troops to the capturer (60 % during Final Siege), zeros the victim's troops, converts every tile the victim owned to Ruins owner id 255, drops the victim's Crown entries, ends every attack touching the victim, rebuilds borders for everyone, and fires an announcement banner.
+- Crown-under-attack alert: `_check_crown_alerts` sets `defender.crown_alert_until = match_time + 2s` whenever any attack's front touches that player's Crown zone. `game.gd` watches the local flag and calls `Input.vibrate_handheld()` on the rising edge; the HUD shows a tappable `⚠ Crown under attack` button that jumps the camera to the local Crown.
+- Final Siege: at `match_time >= FINAL_SIEGE_START_SEC` the sim fires a one-shot announcement and `combined_defense_at` + `_eliminate_player` branch on `state.is_final_siege()`. Timer label changes to "Final Siege M:SS".
+- Win conditions (`_check_win_conditions` each tick): last Crown standing, 60 % of usable land (`DOMINION_WIN_FRACTION`), or most land at `MATCH_TIME_LIMIT_SEC`. `_end_match` sets `state.phase = PHASE_ENDED`, stashes winner + reason, clears active attacks and announces.
+- Victory / defeat overlay: HUD renders a dim full-screen panel with a big title (`Victory!` / `Defeated` / `<Name> wins`), the reason, local stats (time, peak land %, Crowns taken), and two buttons: **Play again** (restart match with a fresh seed) and **Watch** (dismiss overlay for this phase; stays dismissed until a new match starts or a new ending event happens).
+- `Player.crowns_captured` ticks up on each successful centre-tile capture, so the overlay can report it.
+
+**What to check**
+- Build up around 1–2 min, then push into a bot's Crown. The Crown zone makes the inner 6-tile ring noticeably more expensive — a troops-per-tile reading of ~5 for plains outside the zone jumps to ~7.5 inside, and Crown tiles themselves cost ~15.
+- When you crack a bot's centre tile, their land turns grey-ish Ruins, you get a chunk of plunder, and a banner reads "<You> has taken <Name>'s Crown!". The attack row closes and the bot drops off the leaderboard (land = 0).
+- At 10:00, a "Final Siege begins" banner fires; Crown tiles are much weaker and plunder jumps to 60 %.
+- If a bot captures your Crown, your screen pulses, a defeat overlay appears, and you can click "Watch" to keep observing. The match continues until a Dominion / Last-Crown / time-limit win condition triggers.
+- "Play again" resets with a new seed; the overlay closes.
+- The `⚠ Crown under attack` button appears when an enemy front crosses within six tiles of your Crown. Clicking it recentres the camera.
