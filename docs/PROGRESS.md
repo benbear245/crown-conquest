@@ -300,3 +300,32 @@ See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (g
 - Vibration for Crown under attack, Crown falls, ability ready and long-press, all behind the vibration setting.
 - Placeholder sounds and two music loops in `assets/audio/` (replace the files, keep the names). Music switches to the intense track in the Final Siege.
 - Menu (pauses the match): Resume, New map, sound, music, vibration, colour-blind palette, left-handed layout. Saved to `user://settings.cfg`. The match also pauses when the app goes to the background.
+
+## Multiplayer, step 1 and 2: online play on one device and on Wi-Fi
+
+**Built**
+- `scripts/sim/command_router.gd`: every player action is a named command with checked arguments. Local play and online play both go through it.
+- `scripts/net/`:
+  - `match_server.gd` runs an online match (lobby, seats, the real Simulation, commands in, updates out) without knowing about sockets.
+  - `snapshot.gd` builds each player's personal update (changed tiles, public player info, your own full record, and rivals only as `IntelOps` allows) and decides which events each player hears about. Someone you spy on learns they're watched, not by whom.
+  - `mirror.gd` keeps a read-only copy of the match on a joining phone, so the existing map and HUD draw it unchanged.
+  - `net_host.gd` hosts a match over ENet (UDP) and/or a loopback link; `enet_link.gd` and `loopback_link.gd` are the two kinds of connection; `protocol.gd` is the message format (Godot variants, zstd for big messages, size-checked).
+  - `local_session.gd` / `net_session.gd`: the game scene plays through either one the same way.
+  - `dedicated_server.gd` + `scenes/server.tscn`: headless server, `godot --headless --path . res://scenes/server.tscn -- --port 24680`.
+- `scripts/play_modes.gd` + start menu (`scripts/ui/hud_start_menu.gd`): Play vs bots, Practice online (this device), Host a game on this Wi-Fi (shows your address), Join by address, and the lobby. Your name and the last address are remembered.
+- Online: the menu says "match keeps running" and "New map" becomes "Leave match"; no slow motion.
+
+**Tested**
+- Host plus two network clients on one machine: after 130 s the clients' copy of the map matched the server exactly (0 of 24,000 tiles, all buildings); a rival's troops arrived only as a strength band until a Spy succeeded, then exact; a caught spy revealed nothing; malformed commands were refused; a disconnect handed the empire to a bot.
+- Data: full update 3.5 KB at the start, then about 11 KB/s on average (12-minute bot match). Attack fronts are sent every other tick and capture flashes are left to the phones to keep this down.
+- The server runs a whole 12-minute match's rules in about 14 seconds of CPU, so one core could host many matches.
+
+**What to check**
+- Practice online: plays exactly like vs bots, but through the network code.
+- Two phones on the same Wi-Fi: one taps "Host a game on this Wi-Fi" and reads out the address; the other types it and taps Join; the host taps Start. Bots fill the other seats.
+- Close the app on the joining phone mid-match: the host sees "... left — a bot takes over their empire". Reopen and join with the same name to take it back.
+
+**Not done yet**
+- Internet play: needs a dedicated server rented somewhere, and its address in the app (or a lobby service).
+- Android export will need the INTERNET permission when export is set up (Prompt 18).
+- Further data savings: send player info less often, and only fronts that changed.

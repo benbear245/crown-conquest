@@ -82,6 +82,9 @@ var watched_until: float = 0.0          # "Someone is watching you" warning
 var disinfo_until: float = 0.0
 var disinfo_mult: float = 1.0
 var disinfo_cd_until: float = 0.0
+# Online clients only: what the server says this player may know about this
+# rival's troops (an IntelOps.troop_view result). Empty on the server.
+var remote_view: Dictionary = {}
 
 
 func troop_cap() -> float:

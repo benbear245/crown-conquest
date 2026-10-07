@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/map.gd" id="2_map"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/map_overlay.gd" id="5_overlay"]
 [ext_resource type="Script" path="res://scripts/map_input.gd" id="6_input"]
 [ext_resource type="Script" path="res://scripts/audio.gd" id="7_audio"]
+[ext_resource type="Script" path="res://scripts/play_modes.gd" id="8_modes"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_game")
@@ -28,3 +29,6 @@ script = ExtResource("7_audio")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("3_hud")
+
+[node name="PlayModes" type="Node" parent="."]
+script = ExtResource("8_modes")

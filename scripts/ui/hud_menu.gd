@@ -16,6 +16,8 @@ const TOGGLES: Array[Array] = [
 ]
 
 var _checks: Dictionary = {}
+var _new_map_btn: Button
+var _title: Label
 
 
 func _ready() -> void:
@@ -27,13 +29,14 @@ func _ready() -> void:
 	UI.centre(self, WIDTH, 100)
 	var v := UI.vbox(10)
 	add_child(v)
-	v.add_child(UI.label("Paused", 28))
+	_title = UI.label("Paused", 28)
+	v.add_child(_title)
 	var resume := UI.button("Resume", WIDTH - 32)
 	resume.pressed.connect(func() -> void: resume_pressed.emit())
 	v.add_child(resume)
-	var new_map := UI.button("New map", WIDTH - 32)
-	new_map.pressed.connect(func() -> void: new_map_pressed.emit())
-	v.add_child(new_map)
+	_new_map_btn = UI.button("New map", WIDTH - 32)
+	_new_map_btn.pressed.connect(func() -> void: new_map_pressed.emit())
+	v.add_child(_new_map_btn)
 	v.add_child(UI.label("Settings", 18, UI.COLOR_DIM))
 	for t in TOGGLES:
 		var key: String = t[0]
@@ -55,3 +58,9 @@ func open() -> void:
 	for key: String in _checks.keys():
 		(_checks[key] as CheckButton).set_pressed_no_signal(bool(Settings.get(key)))
 	visible = true
+
+
+# Online the match can't pause for everyone, and "New map" means leaving.
+func set_online(online: bool) -> void:
+	_title.text = "Menu (match keeps running)" if online else "Paused"
+	_new_map_btn.text = "Leave match" if online else "New map"

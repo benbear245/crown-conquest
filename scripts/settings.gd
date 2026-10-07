@@ -14,6 +14,8 @@ var music: bool = true
 var vibration: bool = true
 var colorblind: bool = false
 var left_handed: bool = false
+var player_name: String = ""
+var last_address: String = ""
 # First-time hints already shown: hint id -> true.
 var hints_seen: Dictionary = {}
 
@@ -32,6 +34,8 @@ func load_settings() -> void:
 	vibration = bool(cfg.get_value("feel", "vibration", true))
 	colorblind = bool(cfg.get_value("display", "colorblind", false))
 	left_handed = bool(cfg.get_value("display", "left_handed", false))
+	player_name = String(cfg.get_value("online", "name", ""))
+	last_address = String(cfg.get_value("online", "last_address", ""))
 	var seen: Variant = cfg.get_value("hints", "seen", {})
 	hints_seen = seen if seen is Dictionary else {}
 	_apply()
@@ -45,6 +49,8 @@ func save_settings() -> void:
 	cfg.set_value("display", "colorblind", colorblind)
 	cfg.set_value("display", "left_handed", left_handed)
 	cfg.set_value("hints", "seen", hints_seen)
+	cfg.set_value("online", "name", player_name)
+	cfg.set_value("online", "last_address", last_address)
 	if cfg.save(TMP_PATH) != OK:
 		push_warning("Settings could not be saved.")
 		return
@@ -68,6 +74,15 @@ func set_value(key: String, value: bool) -> void:
 	_apply()
 	save_settings()
 	changed.emit()
+
+
+func set_text(key: String, value: String) -> void:
+	match key:
+		"player_name":
+			player_name = value.left(16)
+		"last_address":
+			last_address = value
+	save_settings()
 
 
 func mark_hint_seen(hint_id: String) -> void:

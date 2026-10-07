@@ -62,6 +62,8 @@ static func has_plans(viewer: Player, target_id: int, now: float) -> bool:
 static func troop_view(viewer: Player, target: Player, now: float) -> Dictionary:
 	if viewer.id == target.id:
 		return {"kind": VIEW_LIVE, "value": target.troops}
+	if not target.remote_view.is_empty():
+		return target.remote_view
 	if has_live_spy(viewer, target.id, now):
 		return {"kind": VIEW_LIVE, "value": apparent_troops(target, now)}
 	var rec: Dictionary = viewer.intel.get(target.id, {})

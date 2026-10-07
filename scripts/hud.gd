@@ -24,6 +24,7 @@ var keep_panel: HudKeepPanel
 var enemy_panel: HudEnemyPanel
 var menu: HudMenu
 var end_overlay: HudEndOverlay
+var start_menu: HudStartMenu
 
 var _sim: Simulation
 var _mode_label: Label
@@ -53,6 +54,7 @@ func _ready() -> void:
 	enemy_panel = _add(HudEnemyPanel.new())
 	end_overlay = _add(HudEndOverlay.new())
 	menu = _add(HudMenu.new())
+	start_menu = _add(HudStartMenu.new())
 	_connect_signals()
 	apply_layout()
 	Settings.changed.connect(apply_layout)
@@ -98,7 +100,7 @@ func _on_ability_pressed(ability_id: int) -> void:
 	if ability_id == AbilitiesOps.ID_BOMBARD:
 		target_mode_requested.emit("bombard", Vector2i.ZERO)
 	else:
-		command.emit("ability", [ability_id])
+		command.emit("ability", [ability_id, -1, -1])
 
 
 func setup(sim: Simulation, map_texture: Texture2D) -> void:

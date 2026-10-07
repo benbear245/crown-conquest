@@ -240,7 +240,23 @@ Variety comes from modes and map types, and the reason to keep playing comes fro
 | Skirmish | You vs bots. Choose map size, map type, number of bots, and difficulty |
 | Teams | 4 teams of 2: you and a bot ally vs 3 bot pairs. Allies can't attack each other and can send each other 20% of their troops. The last team with a Crown wins |
 | Daily Challenge | Everyone gets the same map and settings each day (the date sets the map seed). Score = peak land % + a time bonus for winning fast. Your best score is saved |
-| Online multiplayer | Planned for after launch |
+| Online | Host a game on your Wi-Fi or join one by address; practice online on one device. Bots fill empty seats. See "Online play" |
+
+### Online play
+
+**How it works.** One machine runs the real match (the host: a phone that taps "Host a game", or a headless dedicated server). Phones only send their taps as commands; the host checks them with the normal rules and sends each phone, 10 times a second, a personal update: the tiles that changed, your own empire, and only what you may know about rivals (their strength band, or Scout / Spy results). Hidden troop numbers never leave the host, so the spy system can't be cheated by reading phone memory.
+
+| Rule | Value |
+| --- | --- |
+| Players per match | Up to 8 people; bots fill the remaining seats |
+| Who starts the match | The host (on a dedicated server, the first person to join) |
+| Leaving or losing connection | A Normal bot takes over your empire; rejoin with the same name to take it back |
+| Pausing | Not possible online; the menu stays open while the match runs |
+| Slow motion on Crown falls | Off online |
+| Port | UDP 24680 |
+| Data used | About 11 KB per second per player, about 8 MB for a 12-minute match |
+
+**Not built yet:** playing over the internet (needs a hosted dedicated server and a way to find it), accounts, and ranked matchmaking.
 
 ### Maps
 

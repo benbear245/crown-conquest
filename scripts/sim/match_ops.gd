@@ -55,6 +55,18 @@ static func _stamp_crown(state: GameState, player_id: int, cx: int, cy: int) -> 
 	state.crown_centres[player_id] = state.idx(cx, cy)
 
 
+# Rebuilds every Crown's 3x3 from the players' Crown positions (online
+# clients, whose Crown data arrives as positions).
+static func restamp_all_crowns(state: GameState) -> void:
+	for t_idx: int in state.crown_tiles.keys():
+		state.dirty_tiles[t_idx] = true
+	state.crown_tiles.clear()
+	state.crown_centres.clear()
+	for p: Player in state.players:
+		if p.is_alive and p.crown_x >= 0:
+			_stamp_crown(state, p.id, p.crown_x, p.crown_y)
+
+
 static func _clear_crown(state: GameState, player_id: int) -> void:
 	for t_idx: int in state.crown_tiles.keys():
 		if state.crown_tiles[t_idx] == player_id:

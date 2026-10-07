@@ -12,6 +12,8 @@ var local_player_id: int = 1
 # Headless mode: skip presentation events (banners, sounds) so the balance
 # sim can run many matches without paying for things nobody will see.
 var headless: bool = false
+# Capture flashes are drawing-only; an online server leaves them to clients.
+var flashes: bool = true
 var _final_siege_announced: bool = false
 # Cached average land of alive players for Underdog checks, and the Rising
 # Empire (-1 if nobody owns > 30% of the map). Refreshed once a second.
@@ -134,7 +136,7 @@ func announce(text: String, to: Array = []) -> void:
 
 
 func mark_flash(tile_idx: int) -> void:
-	if headless:
+	if headless or not flashes:
 		return
 	state.flash_tiles[tile_idx] = state.match_time + 0.3
 	state.dirty_tiles[tile_idx] = true
@@ -192,6 +194,16 @@ func _recompute_fair_play() -> void:
 
 func rising_empire_id() -> int:
 	return _rising_empire_id
+
+
+func average_land() -> float:
+	return _avg_land_cache
+
+
+# Online clients don't run the rules; the server tells them these values.
+func set_fair_play_view(rising_id: int, avg_land: float) -> void:
+	_rising_empire_id = rising_id
+	_avg_land_cache = avg_land
 
 
 func is_underdog(p: Player) -> bool:
