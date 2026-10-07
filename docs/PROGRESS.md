@@ -225,3 +225,78 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Press Rally while a bot of yours is running — their per-tile cost drops by 30 % for 10 s. The attack row's troop remainder visibly drains more slowly.
 - Press Bombard, then tap an enemy spot within 20 tiles of your border. A dark cracked overlay appears for 12 s, enemy tiles inside the area lose 2 troops/sec, and attacking into the area pays half the extra defense.
 - Hard bots eventually fire Bombard on your Crown; Normal bots will drop Swift March opening the match.
+
+## Prompt 10 follow-up: fixes
+
+**Built**
+- The "Fair play and truces" commit left `game.gd` calling a handler that didn't exist, so the game didn't load. Fixed.
+- Attacks that couldn't afford a single tile used to sit forever and block one of the 3 attack slots. A stalled attack now pulls back on its own (75% returned, like a retreat).
+- Bot truce logic read the wrong player's Oathbreaker flag; fixed so bots refuse truces from Oathbreakers, as designed.
+- Default skirmish bots are now Mixed (3 Easy, 3 Normal, 1 Hard) instead of all Easy.
+
+## Code layout
+
+`simulation.gd` (950 lines) and `hud.gd` (1,170 lines) were split so every script is under 400 lines:
+- Sim rules: `territory_ops.gd` (claiming, borders, expansion), `combat_ops.gd` (attacks, tile cost, defense), `match_ops.gd` (placement, Crown move, elimination, winning), `buildings_ops.gd`, `abilities_ops.gd`, `truces_ops.gd`, `intel_ops.gd` (spying), `shrines_ops.gd`, `boats_ops.gd`. `simulation.gd` is now the tick loop plus one command method per player action.
+- The sim reports what happened through `state.events` (Crown fell, loot, Shrine taken, spy caught, truce offer…); `game_feel.gd` turns those into banners, sounds, vibration and shake. Headless runs skip events entirely.
+- Screen side: `game.gd` (tick loop, taps → commands), `map_input.gd` (tap / long-press / drag / pinch), `camera_rig.gd`, `map.gd` (tile texture), `map_overlay.gd` (fronts, icons, floating numbers), `audio.gd`, `settings.gd` (autoload), and the HUD in `scripts/ui/` (one script per panel).
+
+## Prompt 11: Smarter bots
+
+**Built**
+- `bots.gd`, `bot_build.gd`, `bot_tactics.gd`: each think, a bot lists its possible moves (expand, attack each neighbour, build, spy, offer a truce, wait), scores them by personality and situation, and does the best one. Easy bots make a random move 20% of the time, Normal 8%, Hard never.
+- Difficulty follows the design table (think speed, send amounts, what they may use). Easy bots back off before reaching a human's Crown zone before 4:00. Hard bots retreat from attacks that can't pay for their front, combine Bombard + Rally, move their Crown when it's under attack, and use Ports and boats.
+- Normal bots keep 20% of their troop cap at home and Hard bots 40%, so they defend and keep the growth interest. Before this, Hard bots spent down to zero and won only 3% of matches.
+- Bots judge rivals only through `IntelOps` (strength band, Scout and Spy), never their real troop counts.
+
+**Simulator** (Medium Continent, 8 bots, Mixed, 50 matches, after the balance changes below)
+| Check | Target | Result |
+| --- | --- | --- |
+| Median match length | 7–11 min | 8:06 ✅ |
+| Wins per personality | ≤ 35% | Expander 38%, Raider 28%, Turtle 18%, Opportunist 16% ❌ (close) |
+| Land leader at 3:00 wins | < 55% | 44% ✅ |
+| Decided by the 15:00 limit | < 5% | 14% ❌ |
+| Crowns captured per match | ≥ 5 | 5.4 ✅ |
+| Every feature used in ≥ 30% of matches | ≥ 30% | Boats 2%, Sabotage 10%, Keep 3 14%, Walls 16% ❌ |
+| 1 Hard vs 7 Easy (`--mix hard1`, 30 matches) | Hard ≥ 40% | 57% ✅ |
+
+Wins by difficulty: Easy 8%, Normal 54%, Hard 38% (3 Easy, 4 Normal and 1 Hard bot per match, so per bot Hard wins most). Full report: `reports/balance_2026-10-07.md`. Results move by ±5–8 points between 50-match runs, so the three misses are for the Prompt 17 balance pass.
+
+**Balance numbers changed** (also in DESIGN.md "Balance changes"): attack tile base cost 2 → 5, Rising Empire discount 15% → 25%, Empire upkeep over 35% −30% → −45%. Before them, matches ended in about 4 minutes once bots fought properly.
+
+## Crown move
+
+Tap ♛ Crown → Move Crown, then tap your own land. Once per match from 3:00, costs 20% of your troops, the 3×3 spot must be your land and 10+ tiles from any enemy. For 5 seconds your Crown has no special defense (shown as a dashed line to the new spot); if the new spot is lost in that time the move fails.
+
+## Spy system
+
+See "Spying" in `docs/DESIGN.md`. Rival troops are hidden behind a strength band; Scout, Spy, Sabotage and Steal plans are in the rival's panel (long-press their land) with cost, catch chance and any lock shown on each button. Watchtowers are a new building; Disinformation is in the Crown menu.
+
+**What to check**
+- Long-press a rival: you see "Troops: unknown — Stronger than you" until you Scout. After a Scout you see a range; after a Spy, exact numbers and their buildings.
+- Spy on a bot repeatedly: about one in four gets caught and the banner names you.
+- Build a Watchtower near a rival: their troops show as a range without paying.
+- Turn on Disinformation → Look weak, then watch whether neighbouring bots start attacking you.
+
+## Shrines
+
+See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (green Plenty, red War, blue Sight), also on the minimap. The holder's colour shows as a dot in the diamond and a ◆ next to their name on the leaderboard; your own blessing is listed under the troop bar.
+
+## Prompt 12: Mobile UI
+
+**Built**
+- Layout with anchors only: top bar (troop bar with the sweet-spot band marked, troops/s, land %, timer, Menu), leaderboard (top 5 plus your own row), banner queue under the top bar (max 3, never over the controls), attack list, minimap (tap or drag to move the camera), ability bar, and the bottom bar (♛ Crown button, send slider, 25/50/75/100%).
+- ♛ Crown: tap for the Crown menu, double-tap to jump home. The Crown-under-attack banner also jumps home.
+- Taps come only from mouse events (Godot turns the first finger into a mouse), pinch from raw touches, so a tap is never handled twice. Long-press is 0.45 s and cancelled by a drag or a second finger.
+- First-time hints for placing, expanding, the sweet spot, attacking, building, spying, Shrines and the Crown menu. Each shows once; "Show tips again" in the menu resets them.
+- Left-handed layout mirrors the side panels and the bottom bar. Panels are modal: banners and tips step aside while one is open.
+- Checked by screenshot at 1920×1080 and 2400×1080, both hands.
+
+## Prompt 13: Game feel, sound and vibration
+
+**Built**
+- Pulsing attack fronts (yours brighter), Crown icons that flash red under attack, Crown Shield ring, boats, Shrine glow.
+- Crown falls: screen shake, a 0.5 s slow-motion moment and the fanfare when it's yours or you took it; a smaller shake otherwise. Floating "+N plunder" and "+N loot".
+- Vibration for Crown under attack, Crown falls, ability ready and long-press, all behind the vibration setting.
+- Placeholder sounds and two music loops in `assets/audio/` (replace the files, keep the names). Music switches to the intense track in the Final Siege.
+- Menu (pauses the match): Resume, New map, sound, music, vibration, colour-blind palette, left-handed layout. Saved to `user://settings.cfg`. The match also pauses when the app goes to the background.

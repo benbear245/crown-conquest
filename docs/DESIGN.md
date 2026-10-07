@@ -66,12 +66,14 @@ The last part of the growth formula is "interest": it's biggest at half the cap 
 Each enemy tile costs the attacker:
 
 ```latex
-\text{tile cost} = 2 + 1.5 \times D \times \text{terrain defense} \times \text{building defense}
+\text{tile cost} = 5 + 1.5 \times D \times \text{terrain defense} \times \text{building defense}
 ```
 
 Here D is the defender's troops per tile (their troops ÷ their land). Building defense is capped at ×4 (the Crown has its own rules). The defender also loses 0.5 × D troops for every tile they lose, and their troop cap shrinks with their land.
 
-Example: a defender with 2,000 troops on 1,000 tiles has D = 2. A plains tile costs 2 + 1.5 × 2 = 5 troops. A hill tile inside a Fort's range costs 2 + 1.5 × 2 × 1.5 × 1.6 = 9.2 troops.
+Example: a defender with 2,000 troops on 1,000 tiles has D = 2. A plains tile costs 5 + 1.5 × 2 = 8 troops. A hill tile inside a Fort's range costs 5 + 1.5 × 2 × 1.5 × 1.6 = 12.2 troops.
+
+(The base cost started at 2. Once bots fought properly, matches ended in about 4 minutes, so it was raised to 5; see "Balance changes" below.)
 
 ### Terrain
 
@@ -128,7 +130,7 @@ Buildings cost troops, so every Fort is land you didn't grab. Limits and rising 
 - Long-press your own land to open the build menu.
 - You can't build within 3 tiles of an enemy border, so you can't drop a Fort in the middle of a fight.
 - If an enemy captures a building's tile, the building is destroyed and the attacker gets 25% of its cost back as loot.
-- Building defense multiplies together (Fort × Wall × Crown zone) and is capped at ×4. Terrain defense multiplies on top, so the toughest normal tile is a walled hill inside Fort II range: 1.5 × 4 = ×6.
+- Building defense multiplies together (Fort × Wall × Crown zone × Shrine sanctum) and is capped at ×4. Terrain defense multiplies on top, so the toughest normal tile is a walled hill inside Fort II range: 1.5 × 4 = ×6.
 
 | Building | Cost (troops) | Effect | Limit | Notes |
 | --- | --- | --- | --- | --- |
@@ -136,6 +138,7 @@ Buildings cost troops, so every Fort is land you didn't grab. Limits and rising 
 | Wall | 4 per tile | Drag a line on your own land; each wall tile gets ×2.5 defense | 400 tiles | Drawn as a thick dark border line |
 | Barracks | 400, then +200 each | Troop cap +10% | 4 | Unlocks at 1:00 |
 | Port | 250 | Launch boat attacks from this coast | 3 | Must touch water |
+| Watchtower | 250 | Free Scout-level view (troops as a range) of every rival with land within 15 tiles, refreshed every 5 s; each one also adds +15% to the chance of catching spies | 2 | See "Spying" |
 
 **Boats.** Tap one of your Ports, then tap a free or enemy coast tile across the water (up to 60 tiles away). A boat carries the troops from your send slider at 8 tiles per second along a water path. When it lands, it claims the landing tile and continues as a normal expansion or attack from there. If the troops can't pay for the landing tile, the boat is lost. Ports matter most on Archipelago maps.
 
@@ -160,8 +163,8 @@ The biggest risk in territory games is snowballing: whoever gets big early wins 
 | --- | --- | --- |
 | Peace period | 0:00 to 1:00 | Nobody can attack |
 | Underdog | Your land is under 50% of the average land of players still alive | Troop growth +25%; free land and Ruins cost 25% less |
-| Empire upkeep | You own over 20% of the map | Troop growth −15% (−30% over 35%) |
-| Rising Empire | One player owns over 30% of the map | Everyone else's attacks on them pay 15% less per tile; bots target them; they get a "Rising Empire" icon |
+| Empire upkeep | You own over 20% of the map | Troop growth −15% (−45% over 35%) |
+| Rising Empire | One player owns over 30% of the map | Everyone else's attacks on them pay 25% less per tile; bots target them; they get a "Rising Empire" icon |
 | Ruins | A Crown falls | The loser's land becomes cheap land for everyone, not a free gift to the capturer |
 | Final Siege | From 10:00 | Crowns weaken, so matches can't stall forever |
 
@@ -173,6 +176,35 @@ Growth bonuses and penalties add together. For example, +10% from gems and +25% 
 - Bots answer within 2 seconds. They're more likely to accept if they're already fighting someone else, or if you're bigger than them.
 - A truce lasts 90 seconds. Neither side can attack the other. You can have 2 truces at once.
 - Attacking during a truce makes you an **Oathbreaker**: your attacks pay 20% more for 45 seconds, and every bot refuses your truces for the rest of the match. Bots can break truces too, and get the same penalty.
+
+### Spying
+
+Rivals' troop counts are hidden. For free you see their land, their Crown and a **strength band**: Weaker than you (under 75% of your troops), About even, or Stronger than you (over 133%). Long-press a rival's land to open their panel and spend troops to learn more.
+
+| Action | Cost | Unlocks | What you get |
+| --- | --- | --- | --- |
+| Scout | 5% of your troops (min 30) | Start | Their troops as a range (±20%), one snapshot. Shown as "old" after 20 s, forgotten after 90 s |
+| Spy | 12% (min 40) | 2:00 | Exact live troops, cap, growth, buildings, Keep level, truces and ability cooldowns for 30 s |
+| Sabotage | 15% (min 50) | 4:00 | Their building nearest your border (not Ports) stops working for 15 s |
+| Steal plans | 10% (min 40) | 4:00 | Who they are attacking and, for bots, who they plan to attack next, for 20 s |
+
+- One spy action per target every 30 seconds.
+- **Getting caught:** 25% base chance, +15% for each working Watchtower the target owns. A caught spy costs the troops, tells the target who sent it, and bots hold a grudge (they attack you more and refuse your truces for 90 s).
+- **Being watched:** a spy action that succeeds still warns the target "Someone is watching you" for 6 s, without saying who.
+- **Disinformation** (tap your Crown): pay 5% of your troops to look weak (×0.5) or strong (×1.8) to everyone for 30 s. It changes the strength band and every Scout and Spy reading. 60 s cooldown after it ends.
+- **Online play:** everything a player can know about a rival goes through one place in the code (`IntelOps`), so a server can send each phone only what that player is allowed to see.
+
+### Shrines
+
+When placement ends, 2 (Small), 3 (Medium) or 4 (Large) Shrines appear on free land, at least 14 tiles from any Crown and 24 from each other, at spots about equally far from the two nearest Crowns. Each one is a 3×3 sanctum. Whoever owns the centre tile gets its blessing; the sanctum is holy ground with ×1.5 defense (counts as building defense).
+
+| Shrine | Blessing |
+| --- | --- |
+| Shrine of Plenty | +10% troop growth (adds to the other growth bonuses) |
+| Shrine of War | Your attacks cost 10% less per tile |
+| Shrine of Sight | Scout-level view of every rival's troops, refreshed every 5 s |
+
+Medium maps get one of each; Small maps get Plenty and War; Large maps get Plenty, War, Sight and a second Plenty. Capturing a Shrine is announced to everyone.
 
 ## Bots
 
@@ -192,6 +224,8 @@ Each bot also gets a personality, so matches feel different:
 | Raider | Attacks its weakest neighbour; races for Ruins | Overextends and runs low on troops |
 | Turtle | Builds Forts, Walls and Keep upgrades early; counterattacks | Grows slowly |
 | Opportunist | Attacks whoever is busy fighting someone else; breaks truces 20% of the time | Other bots stop trusting it |
+
+Bot brains score every move they could make (expand, attack each neighbour, build, spy, offer a truce, or wait) and do the best one; Easy bots pick a random move 20% of the time and Normal bots 8%. Normal bots keep 20% of their troop cap at home and Hard bots 40%, so they defend and keep growing. Bots only ever see rivals through the same strength band, Scout and Spy information a player gets.
 
 Bots get fantasy names built from a title and a name, like "Duke Ashford" or "Lady Vex". The default match has 7 bots with a mix of personalities. Skirmish setup offers Easy, Normal, Hard, or Mixed (3 Easy, 3 Normal, 1 Hard).
 
@@ -556,3 +590,14 @@ Commit as "Ready for Android".
 ### After Prompt 18
 
 Play it on your phone and give it to a few friends. Write down what felt unfair or boring, and describe it to Claude in plain words: "Turtle bots are too hard to kill" or "Nothing happens between minutes 4 and 6." Then rerun Prompt 17. Online multiplayer is the next big step after that, and it's easier because the game logic is already separate from the graphics.
+
+## Balance changes
+
+Changes made after the bots learned to fight properly (simulator, Medium map, 8 bots, Mixed). Each was tested in the balance simulator; see `docs/PROGRESS.md` for the runs.
+
+| Number | Old | New | Why |
+| --- | --- | --- | --- |
+| Attack tile cost base | 2 | 5 | Early Crowns fell about a minute after the peace period; matches ended in about 4 minutes |
+| Rising Empire attack discount | 15% | 25% | One player kept snowballing to a Dominion win |
+| Empire upkeep over 35% of the map | −30% | −45% | Same |
+
