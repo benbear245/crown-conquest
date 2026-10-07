@@ -18,6 +18,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Balance="*res://scripts/balance.gd"
+Settings="*res://scripts/settings.gd"
 
 [display]
 

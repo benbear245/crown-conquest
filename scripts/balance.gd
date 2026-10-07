@@ -55,7 +55,7 @@ const SEND_MIN_FRACTION: float = 0.10
 const SEND_MAX_FRACTION: float = 1.00
 
 # --- Attacking ---------------------------------------------------------------
-const ATTACK_TILE_COST_BASE: float = 2.0
+const ATTACK_TILE_COST_BASE: float = 5.0           # design started at 2; raised after bots learned to fight (see PROGRESS.md)
 const ATTACK_TILE_COST_SCALE: float = 1.5     # multiplied by defender D x defenses
 const DEFENDER_LOSS_PER_TILE: float = 0.5     # defender loses 0.5 x D per lost tile
 const MAX_SIMULTANEOUS_ATTACKS: int = 3
@@ -154,6 +154,10 @@ const PORT_LIMIT: int = 3
 const BOAT_RANGE_TILES: int = 60
 const BOAT_SPEED_TILES_PER_SEC: float = 8.0
 
+const WATCHTOWER_COST: float = 250.0
+const WATCHTOWER_LIMIT: int = 2
+const WATCHTOWER_RADIUS: int = 15              # sees rivals with land this close
+
 const BUILD_MIN_DIST_FROM_ENEMY: int = 3
 const CAPTURED_BUILDING_LOOT_FRACTION: float = 0.25
 
@@ -162,6 +166,7 @@ const BUILDING_FORT: int = 0
 const BUILDING_FORT2: int = 1
 const BUILDING_BARRACKS: int = 2
 const BUILDING_PORT: int = 3
+const BUILDING_WATCHTOWER: int = 4
 
 # --- Abilities ----------------------------------------------------------------
 const SWIFT_MARCH_UNLOCK_SEC: float = 0.0
@@ -199,10 +204,10 @@ const UNDERDOG_CLAIM_DISCOUNT: float = 0.25
 const EMPIRE_UPKEEP_LAND_THRESHOLD_1: float = 0.20
 const EMPIRE_UPKEEP_PENALTY_1: float = -0.15
 const EMPIRE_UPKEEP_LAND_THRESHOLD_2: float = 0.35
-const EMPIRE_UPKEEP_PENALTY_2: float = -0.30
+const EMPIRE_UPKEEP_PENALTY_2: float = -0.45          # design started at -0.30
 
 const RISING_EMPIRE_LAND_THRESHOLD: float = 0.30
-const RISING_EMPIRE_ATTACK_DISCOUNT: float = 0.15
+const RISING_EMPIRE_ATTACK_DISCOUNT: float = 0.25    # design started at 0.15
 
 const DOMINION_WIN_FRACTION: float = 0.60
 const MATCH_TIME_LIMIT_SEC: float = 900.0
@@ -213,6 +218,57 @@ const TRUCE_LIMIT: int = 2
 const TRUCE_BOT_RESPONSE_SEC: float = 2.0
 const OATHBREAKER_ATTACK_PENALTY: float = 0.20
 const OATHBREAKER_DURATION_SEC: float = 45.0
+
+const TRUCE_HUMAN_REPLY_SEC: float = 10.0       # offers to a human expire after this
+
+# --- Spying -------------------------------------------------------------------
+# Action ids (index into the tables below).
+const SPY_SCOUT: int = 0
+const SPY_SPY: int = 1
+const SPY_SABOTAGE: int = 2
+const SPY_PLANS: int = 3
+static var SPY_COST_FRACTION: PackedFloat32Array = PackedFloat32Array([0.05, 0.12, 0.15, 0.10])
+static var SPY_MIN_COST: PackedFloat32Array      = PackedFloat32Array([30.0, 40.0, 50.0, 40.0])
+static var SPY_UNLOCK_SEC: PackedFloat32Array    = PackedFloat32Array([0.0, 120.0, 240.0, 240.0])
+const SPY_TARGET_COOLDOWN_SEC: float = 30.0       # per target, shared by all actions
+const SPY_CATCH_CHANCE_BASE: float = 0.25
+const SPY_CATCH_CHANCE_PER_WATCHTOWER: float = 0.15
+const SPY_WARNING_SEC: float = 6.0                # "Someone is watching you" banner
+const SCOUT_RANGE_FRACTION: float = 0.20          # shown as value +/- 20%
+const SCOUT_NOISE_FRACTION: float = 0.10          # snapshot centre is off by up to 10%
+const SCOUT_FRESH_SEC: float = 20.0               # after this the snapshot shows as stale
+const SCOUT_FORGET_SEC: float = 90.0              # after this it is dropped
+const SPY_DURATION_SEC: float = 30.0
+const PLANS_DURATION_SEC: float = 20.0
+const SABOTAGE_DURATION_SEC: float = 15.0
+const INTEL_PASSIVE_REFRESH_SEC: float = 5.0      # Watchtower / Shrine of Sight snapshots
+# Free "strength band": rival troops vs yours.
+const STRENGTH_BAND_WEAK_RATIO: float = 0.75
+const STRENGTH_BAND_STRONG_RATIO: float = 1.33
+# What a band means when someone has nothing better (x your own troops).
+const BAND_ESTIMATE_WEAK: float = 0.6
+const BAND_ESTIMATE_EVEN: float = 1.0
+const BAND_ESTIMATE_STRONG: float = 1.6
+# Disinformation (bought from the Keep panel).
+const DISINFO_COST_FRACTION: float = 0.05
+const DISINFO_DURATION_SEC: float = 30.0
+const DISINFO_COOLDOWN_SEC: float = 60.0
+const DISINFO_WEAK_MULT: float = 0.5
+const DISINFO_STRONG_MULT: float = 1.8
+
+# --- Shrines -----------------------------------------------------------------
+const SHRINE_PLENTY: int = 0
+const SHRINE_WAR: int = 1
+const SHRINE_SIGHT: int = 2
+# Which Shrines a map gets, by size (small, medium, large).
+static var SHRINE_KINDS_SMALL: PackedInt32Array  = PackedInt32Array([0, 1])
+static var SHRINE_KINDS_MEDIUM: PackedInt32Array = PackedInt32Array([0, 1, 2])
+static var SHRINE_KINDS_LARGE: PackedInt32Array  = PackedInt32Array([0, 1, 2, 0])
+const SHRINE_MIN_DIST_FROM_CROWN: int = 14
+const SHRINE_MIN_DIST_BETWEEN: int = 24
+const SHRINE_DEFENSE: float = 1.5                 # sanctum tiles, counts as building defense
+const SHRINE_PLENTY_GROWTH_BONUS: float = 0.10
+const SHRINE_WAR_ATTACK_DISCOUNT: float = 0.10
 
 # --- Bots --------------------------------------------------------------------
 const BOT_EASY_THINK_SEC: float = 2.5
@@ -232,6 +288,16 @@ const BOT_HARD_SEND_MAX: float = 0.80
 const BOT_DIFFICULTY_EASY: int = 0
 const BOT_DIFFICULTY_NORMAL: int = 1
 const BOT_DIFFICULTY_HARD: int = 2
+
+# Chance a bot picks a random decent move instead of its best one.
+const BOT_EASY_MISTAKE_CHANCE: float = 0.20
+const BOT_NORMAL_MISTAKE_CHANCE: float = 0.08
+const BOT_HARD_MISTAKE_CHANCE: float = 0.0
+const BOT_HARD_RESERVE_OF_CAP: float = 0.40      # troops kept home, as a share of the cap
+const BOT_NORMAL_RESERVE_OF_CAP: float = 0.20
+const BOT_HARD_RETREAT_RATIO: float = 0.35        # retreat when the attack can't pay this share of its front
+const BOT_TRUCE_OFFER_CHANCE: float = 0.15        # per think, when pressed on two fronts
+const BOT_GRUDGE_SEC: float = 90.0
 
 const BOT_PERSONALITY_EXPANDER: int = 0
 const BOT_PERSONALITY_RAIDER: int = 1
@@ -278,10 +344,30 @@ static var PLAYER_COLORS: PackedColorArray = PackedColorArray([
 ])
 
 
+# Colour-blind friendly set (Okabe-Ito based, plus extra distinct shades).
+static var PLAYER_COLORS_COLORBLIND: PackedColorArray = PackedColorArray([
+	Color(0.00, 0.00, 0.00),
+	Color(0.00, 0.45, 0.70),      # blue
+	Color(0.90, 0.62, 0.00),      # orange
+	Color(0.00, 0.62, 0.45),      # bluish green
+	Color(0.94, 0.89, 0.26),      # yellow
+	Color(0.80, 0.47, 0.65),      # reddish purple
+	Color(0.84, 0.37, 0.00),      # vermillion
+	Color(0.34, 0.71, 0.91),      # sky blue
+	Color(1.00, 1.00, 1.00),      # white
+	Color(0.55, 0.55, 0.55),      # grey
+	Color(0.40, 0.25, 0.10),      # dark brown
+	Color(0.10, 0.10, 0.30),      # navy
+	Color(0.70, 0.90, 0.60),      # pale green
+])
+static var colorblind_mode: bool = false
+
+
 func color_for_player(player_id: int) -> Color:
-	if player_id <= 0 or player_id >= PLAYER_COLORS.size():
+	var table: PackedColorArray = PLAYER_COLORS_COLORBLIND if colorblind_mode else PLAYER_COLORS
+	if player_id <= 0 or player_id >= table.size():
 		return Color.BLACK
-	return PLAYER_COLORS[player_id]
+	return table[player_id]
 
 
 # --- Bot names ---------------------------------------------------------------
@@ -297,7 +383,7 @@ static var BOT_NAMES: PackedStringArray = PackedStringArray([
 ])
 
 
-static func generate_name(rng: RandomNumberGenerator) -> String:
+func generate_name(rng: RandomNumberGenerator) -> String:
 	var title: String = BOT_TITLES[rng.randi() % BOT_TITLES.size()]
-	var name: String = BOT_NAMES[rng.randi() % BOT_NAMES.size()]
-	return "%s %s" % [title, name]
+	var given: String = BOT_NAMES[rng.randi() % BOT_NAMES.size()]
+	return "%s %s" % [title, given]

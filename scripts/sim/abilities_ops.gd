@@ -68,6 +68,41 @@ static func cooldown_until(ability_id: int, p: Player) -> float:
 
 # --- Activation --------------------------------------------------------------
 
+static func activate(sim: Simulation, p: Player, ability_id: int, target_x: int, target_y: int) -> bool:
+	match ability_id:
+		ID_SWIFT_MARCH:
+			return activate_swift_march(sim, p)
+		ID_CROWN_SHIELD:
+			return activate_crown_shield(sim, p)
+		ID_RALLY:
+			return activate_rally(sim, p)
+		ID_BOMBARD:
+			return activate_bombard(sim, p, target_x, target_y)
+		_:
+			return false
+
+
+static func is_active(ability_id: int, p: Player, now: float) -> bool:
+	match ability_id:
+		ID_SWIFT_MARCH:
+			return is_swift_march_active(p, now)
+		ID_CROWN_SHIELD:
+			return is_crown_shield_active(p, now)
+		ID_RALLY:
+			return is_rally_active(p, now)
+		_:
+			return false
+
+
+# True when the ability could be pressed right now (ignores Bombard's target).
+static func is_ready(ability_id: int, p: Player, sim: Simulation) -> bool:
+	var now: float = sim.state.match_time
+	if now < unlock_sec(ability_id) or cooldown_until(ability_id, p) > now:
+		return false
+	if ability_id == ID_CROWN_SHIELD and sim.state.is_final_siege():
+		return false
+	return not is_active(ability_id, p, now)
+
 static func activate_swift_march(sim: Simulation, p: Player) -> bool:
 	var now: float = sim.state.match_time
 	if p.swift_march_cd_until > now:
@@ -113,7 +148,7 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 	if not state.in_bounds(target_x, target_y):
 		return false
 	# Target must be within BOMBARD_RANGE_TILES of any of the player's border tiles.
-	if not _in_range_of_border(sim, p, target_x, target_y, Balance.BOMBARD_RANGE_TILES):
+	if not in_range_of_border(sim, p, target_x, target_y, Balance.BOMBARD_RANGE_TILES):
 		return false
 	var c: float = floorf(p.troops * Balance.BOMBARD_COST_FRACTION)
 	if p.troops < c:
@@ -141,7 +176,7 @@ static func activate_bombard(sim: Simulation, p: Player, target_x: int, target_y
 	return true
 
 
-static func _in_range_of_border(sim: Simulation, p: Player, target_x: int, target_y: int, range_tiles: int) -> bool:
+static func in_range_of_border(sim: Simulation, p: Player, target_x: int, target_y: int, range_tiles: int) -> bool:
 	var r2: int = range_tiles * range_tiles
 	var state: GameState = sim.state
 	for i_v in p.border.keys():
@@ -214,7 +249,7 @@ static func tick(sim: Simulation) -> void:
 
 
 # Checks whether a tile sits inside any active Bombard area; used to halve
-# the defender's defense in `combined_defense_at`.
+# the defender's defense in CombatOps.combined_defense_at.
 static func tile_in_any_bombard(state: GameState, tile_idx: int) -> bool:
 	if state.bombards.is_empty():
 		return false

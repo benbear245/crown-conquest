@@ -24,7 +24,7 @@ static func try_launch(sim: Simulation, player: Player, port_x: int, port_y: int
 		return false
 	# BFS from water tiles adjacent to the Port.
 	var start_tiles: Array = []
-	for off in Simulation.NEIGHBOR_OFFSETS:
+	for off in TerritoryOps.NEIGHBOR_OFFSETS:
 		var nx: int = port_x + off.x
 		var ny: int = port_y + off.y
 		if not state.in_bounds(nx, ny):
@@ -71,7 +71,7 @@ static func _bfs_water_path(state: GameState, start_tiles: Array,
 			continue
 		var pos: Vector2i = state.idx_to_xy(cur)
 		# If any neighbour is the target tile, we're done.
-		for off in Simulation.NEIGHBOR_OFFSETS:
+		for off in TerritoryOps.NEIGHBOR_OFFSETS:
 			var nx: int = pos.x + off.x
 			var ny: int = pos.y + off.y
 			if nx == target_x and ny == target_y:
@@ -79,7 +79,7 @@ static func _bfs_water_path(state: GameState, start_tiles: Array,
 				break
 		if end_ti >= 0:
 			break
-		for off in Simulation.NEIGHBOR_OFFSETS:
+		for off in TerritoryOps.NEIGHBOR_OFFSETS:
 			var nx: int = pos.x + off.x
 			var ny: int = pos.y + off.y
 			if not state.in_bounds(nx, ny):
@@ -119,7 +119,37 @@ static func tick(sim: Simulation) -> void:
 		var b: Boat = state.boats[i]
 		b.progress += step
 		if b.progress >= float(b.path.size() - 1):
-			sim.boat_land(b)
+			_land(sim, b)
 			state.boats.remove_at(i)
 			continue
 		i += 1
+
+
+# A boat reaching its landing tile claims it (free land) or opens an attack
+# from it (enemy land). If it can't do either, the troops come back home.
+static func _land(sim: Simulation, b: Boat) -> void:
+	var state: GameState = sim.state
+	var p: Player = state.get_player(b.owner_id)
+	if p == null or not p.is_alive:
+		return
+	var tx: int = b.landing_tile_x
+	var ty: int = b.landing_tile_y
+	var ti: int = state.idx(tx, ty)
+	var ow: int = state.owners[ti]
+	if ow == p.id:
+		p.troops += b.troops
+		return
+	if state.is_player_owner(ow):
+		if CombatOps.can_attack(sim, p, ow):
+			CombatOps.open_attack(sim, p, ow, b.troops, {ti: true})
+		else:
+			p.troops += b.troops
+		return
+	var cost: float = TerritoryOps.claim_cost_idx(state, ti)
+	if b.troops < cost:
+		return
+	TerritoryOps.claim_tile(sim, p.id, tx, ty)
+	# Rest of troops roll into the player's expansion bucket.
+	p.expansion_troops += b.troops - cost
+	if p.expansion_timer <= 0.0:
+		p.expansion_timer = Balance.EXPANSION_RING_INTERVAL_SEC

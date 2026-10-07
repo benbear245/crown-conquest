@@ -14,3 +14,6 @@ var front: Dictionary = {}
 
 # Seconds remaining until the next ring advance.
 var advance_timer: float = 0.0
+# Total cost of the front tiles the last ring couldn't afford (0 = none
+# stalled). Hard bots read their own attacks' value to decide on retreating.
+var last_ring_cost: float = 0.0

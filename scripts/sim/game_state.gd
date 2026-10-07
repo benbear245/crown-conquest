@@ -4,6 +4,8 @@ extends RefCounted
 # All match data. Pure data, no nodes. The Simulation mutates this.
 # Terrain and owner live in packed byte arrays (one byte per tile).
 
+const RUINS_OWNER_ID: int = 255
+
 var width: int = Balance.MAP_MEDIUM_WIDTH
 var height: int = Balance.MAP_MEDIUM_HEIGHT
 
@@ -11,14 +13,12 @@ var terrain: PackedByteArray = PackedByteArray()
 var owners: PackedByteArray = PackedByteArray()      # 0 = unowned; 255 = Ruins
 var players: Array[Player] = []
 
-const RUINS_OWNER_ID: int = 255
-
 # Set of tile indices changed since the last Map.render() call.
 # Keys are tile indices; values are always true. Cleared by the renderer.
 var dirty_tiles: Dictionary = {}
 
 var tick_count: int = 0
-var seed: int = 0
+var match_seed: int = 0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 # Match phase and clocks. Set by Simulation; read by HUD and bots.
@@ -40,34 +40,48 @@ var flash_tiles: Dictionary = {}
 # single-tile features without a radius.
 var buildings: Array = []                      # Array[Building]
 var wall_tiles: Dictionary = {}                # tile_idx -> owner_id
-# Fast lookup: tile_idx -> Building for the Fort/Fort II/Barracks/Port stamped there.
+# Fast lookup: tile_idx -> Building stamped there.
 var building_at_tile: Dictionary = {}
 # Active boats (all players).
 var boats: Array = []                          # Array[Boat]
-# Floating "+N loot" numbers for the HUD. tile_idx -> {owner_id, amount, until}.
-var loot_popups: Dictionary = {}
 # Active Bombards: each entry has owner_id, target_x, target_y, until.
 var bombards: Array = []
-# Pending truce offers awaiting a bot answer. Entries: {from_id, to_id, decide_at}.
+# Pending truce offers. Entries: {from_id, to_id, decide_at}.
 var pending_truces: Array = []
+# Shrines placed when the match starts. Array[Shrine].
+var shrines: Array = []
+# tile idx -> Shrine for every tile of a Shrine's 3x3 sanctum.
+var shrine_at_tile: Dictionary = {}
 
-# End-of-match outcome, set by Simulation._end_match.
+# Things that just happened, for the presentation layer (banners, sounds,
+# shakes). Each entry is a Dictionary with a "type" key. The sim only appends
+# (and never in headless mode); the game scene drains the list every frame.
+var events: Array = []
+
+# How many times each command succeeded this match ("fort", "rally", "spy_scout",
+# ...). The balance simulator reports which features bots actually use.
+var usage: Dictionary = {}
+
+# End-of-match outcome, set by MatchOps.end_match.
 var winner_id: int = 0
 var win_reason: String = ""
-# Top-of-screen banner shown by the HUD until the expiry.
-var active_announcement_text: String = ""
-var active_announcement_until: float = 0.0
+
+var _usable_tiles: int = -1
 
 
 func is_final_siege() -> bool:
 	return match_time >= Balance.FINAL_SIEGE_START_SEC
 
 
-func configure(w: int, h: int, match_seed: int) -> void:
+func is_peace() -> bool:
+	return match_time < Balance.PEACE_PERIOD_SEC
+
+
+func configure(w: int, h: int, seed_value: int) -> void:
 	width = w
 	height = h
-	seed = match_seed
-	rng.seed = match_seed
+	match_seed = seed_value
+	rng.seed = seed_value
 	terrain = PackedByteArray()
 	terrain.resize(w * h)
 	owners = PackedByteArray()
@@ -82,17 +96,19 @@ func configure(w: int, h: int, match_seed: int) -> void:
 	wall_tiles.clear()
 	building_at_tile.clear()
 	boats = []
-	loot_popups.clear()
 	bombards = []
 	pending_truces = []
+	shrines = []
+	shrine_at_tile.clear()
+	events = []
+	usage = {}
 	winner_id = 0
 	win_reason = ""
-	active_announcement_text = ""
-	active_announcement_until = 0.0
 	tick_count = 0
 	phase = Balance.PHASE_PLACEMENT
 	placement_time_left = Balance.PLACEMENT_PHASE_SEC
 	match_time = 0.0
+	_usable_tiles = -1
 
 
 func tile_count() -> int:
@@ -107,35 +123,9 @@ func in_bounds(x: int, y: int) -> bool:
 	return x >= 0 and x < width and y >= 0 and y < height
 
 
-func get_owner_at(x: int, y: int) -> int:
-	return owners[idx(x, y)]
-
-
-func get_owner_idx(i: int) -> int:
-	return owners[i]
-
-
-func set_owner(x: int, y: int, owner_id: int) -> void:
-	var i := idx(x, y)
-	if owners[i] != owner_id:
-		owners[i] = owner_id
-		dirty_tiles[i] = true
-
-
 func set_owner_idx(i: int, owner_id: int) -> void:
 	if owners[i] != owner_id:
 		owners[i] = owner_id
-		dirty_tiles[i] = true
-
-
-func get_terrain_at(x: int, y: int) -> int:
-	return terrain[idx(x, y)]
-
-
-func set_terrain(x: int, y: int, t: int) -> void:
-	var i := idx(x, y)
-	if terrain[i] != t:
-		terrain[i] = t
 		dirty_tiles[i] = true
 
 
@@ -145,11 +135,15 @@ func is_blocked_terrain(t: int) -> bool:
 	return Balance.TERRAIN_BLOCKED[t] == 1
 
 
+func is_player_owner(owner_id: int) -> bool:
+	return owner_id > 0 and owner_id != RUINS_OWNER_ID
+
+
 func get_player(player_id: int) -> Player:
-	for p in players:
-		if p.id == player_id:
-			return p
-	return null
+	if player_id <= 0 or player_id > players.size():
+		return null
+	var p: Player = players[player_id - 1]
+	return p if p.id == player_id else null
 
 
 func alive_player_count() -> int:
@@ -160,15 +154,32 @@ func alive_player_count() -> int:
 	return n
 
 
+# Tiles whose terrain is not blocked (mountains or water). Terrain never
+# changes after map generation, so this is counted once and cached.
 func total_usable_tiles() -> int:
-	# Tiles whose terrain is not blocked (mountains or water).
-	var n := 0
-	for i in range(terrain.size()):
-		if not is_blocked_terrain(terrain[i]):
-			n += 1
-	return n
+	if _usable_tiles < 0:
+		_usable_tiles = 0
+		for i in range(terrain.size()):
+			if not is_blocked_terrain(terrain[i]):
+				_usable_tiles += 1
+	return _usable_tiles
+
+
+func land_fraction(p: Player) -> float:
+	return float(p.land) / float(maxi(total_usable_tiles(), 1))
 
 
 func idx_to_xy(i: int) -> Vector2i:
 	@warning_ignore("integer_division")
 	return Vector2i(i % width, i / width)
+
+
+func push_event(event: Dictionary) -> void:
+	events.append(event)
+
+
+static func format_time(seconds: float) -> String:
+	var total: int = maxi(0, int(seconds))
+	@warning_ignore("integer_division")
+	var mm: int = total / 60
+	return "%d:%02d" % [mm, total % 60]

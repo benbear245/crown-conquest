@@ -39,7 +39,7 @@ static func generate(state: GameState, map_type: int) -> void:
 
 	var elevation := FastNoiseLite.new()
 	elevation.noise_type = FastNoiseLite.TYPE_PERLIN
-	elevation.seed = state.seed
+	elevation.seed = state.match_seed
 	elevation.frequency = 0.025
 	elevation.fractal_octaves = 4
 	elevation.fractal_lacunarity = 2.0
@@ -47,7 +47,7 @@ static func generate(state: GameState, map_type: int) -> void:
 
 	var biome := FastNoiseLite.new()
 	biome.noise_type = FastNoiseLite.TYPE_PERLIN
-	biome.seed = state.seed + 1337
+	biome.seed = state.match_seed + 1337
 	biome.frequency = 0.05
 
 	var elevs := PackedFloat32Array()
