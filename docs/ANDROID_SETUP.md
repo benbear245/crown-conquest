@@ -18,10 +18,10 @@ about 10 GB of free disk space.
 Godot uses Java's tools to sign the app.
 
 1. Go to **https://adoptium.net/temurin/releases/**.
-2. Pick **Operating System: Windows**, **Architecture: x64**, **Package Type: JDK**, **Version: 17 - LTS**.
+2. Near the top of the page, click the **JDK 17 - LTS** tab. The page opens on the newest LTS, so 17 is not picked for you. In the **Windows** box, make sure **x64** and **JDK** (not JRE) are selected.
 3. Download the **.msi** file and run it.
-4. On the "Custom Setup" page, click the icon next to **Set JAVA_HOME variable** and choose **"Will be installed on local hard drive"**. Then click Next / Install.
-5. Check it worked: open **PowerShell** (Start menu → type `powershell`) and run:
+4. On the "Custom Setup" page, click the icon (red X) next to **Set or override JAVA_HOME variable** and choose **"Will be installed on local hard drive"**. Leave **Modify PATH variable** switched on. Then click Next / Install.
+5. Check it worked: open a **new** **PowerShell** window (Start menu → type `powershell`). A window that was already open won't see the new Java. Then run:
 
    ```powershell
    java -version
@@ -43,11 +43,11 @@ get it is Android Studio, even though you'll never write code in it.
 1. Download Android Studio from **https://developer.android.com/studio** and install it with the default options.
 2. Start Android Studio. Click through the first-run wizard with **Standard** settings and let it download everything (this takes a while).
 3. On the welcome screen, click **More Actions → SDK Manager**.
-4. On the **SDK Platforms** tab, tick the newest **Android** version (API 34 or higher).
-5. On the **SDK Tools** tab, tick:
-   - **Android SDK Build-Tools**
+4. On the **SDK Platforms** tab, make sure an Android version with **API level 35 or higher** is ticked. The Standard setup usually installed the newest one already.
+5. On the **SDK Tools** tab, make sure these are ticked (the Standard setup usually ticked the first two already):
+   - **Android SDK Build-Tools** (Godot signs the app with its `apksigner`)
+   - **Android SDK Platform-Tools** (contains `adb`, which installs the app on your phone)
    - **Android SDK Command-line Tools (latest)**
-   - **Android SDK Platform-Tools**
 6. Click **Apply** and wait for the downloads.
 7. Write down the **Android SDK Location** shown at the top of that window. It's usually
    `C:\Users\benbe\AppData\Local\Android\Sdk`.
