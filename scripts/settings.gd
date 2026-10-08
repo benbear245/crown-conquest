@@ -21,6 +21,7 @@ var hints_seen: Dictionary = {}
 
 
 func _ready() -> void:
+	BugReport.install()
 	load_settings()
 
 

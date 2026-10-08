@@ -10,7 +10,9 @@ config_version=5
 
 [application]
 
-config/name="CrownConquest"
+config/name="Crown Conquest"
+config/version="0.1.0"
+config/quit_on_go_back=false
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
@@ -19,6 +21,10 @@ config/icon="res://icon.svg"
 
 Balance="*res://scripts/balance.gd"
 Settings="*res://scripts/settings.gd"
+
+[debug]
+
+file_logging/enable_file_logging=true
 
 [display]
 
@@ -33,6 +39,8 @@ window/handheld/orientation="landscape"
 3d/physics_engine="Jolt Physics"
 
 [rendering]
+
+textures/vram_compression/import_etc2_astc=true
 
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"

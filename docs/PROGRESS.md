@@ -329,3 +329,24 @@ See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (g
 - Internet play: needs a dedicated server rented somewhere, and its address in the app (or a lobby service).
 - Android export will need the INTERNET permission when export is set up (Prompt 18).
 - Further data savings: send player info less often, and only fronts that changed.
+
+## Test build v0.1.0
+
+**Bug sweep**
+- Six full matches (3 vs bots, 3 practice online) were played through the real game screens with random taps, long-presses, panels and commands (including invalid ones), ending with the end screen and "Play again". No script errors or warnings.
+- All 60 scripts load with no errors or warnings; the exported Linux build starts with no errors.
+
+**Added for testers**
+- Version shown on the start screen and in the menu ("Test build v0.1.0"), set in `project.godot`.
+- **How to play** on the start screen.
+- **Menu → Report a problem** copies device details, the error count and the last 120 log lines (`scripts/bug_report.gd`, a Godot Logger) so testers can paste them into a message. File logging is also on.
+- Android back button: closes a panel, otherwise opens the menu; on the start screen it leaves the app.
+- Android permissions for online play (Internet, network and Wi-Fi state) plus vibration.
+
+**Builds** (`export_presets.cfg`, see `docs/BUILDING.md`)
+- Android: `CrownConquest-v0.1.0.apk`, 27 MB, arm64, Android 7+, signed with APK Signature Scheme v2 and verified.
+- Windows: `CrownConquest-v0.1.0-windows.zip` (one .exe plus the tester guide).
+- Linux: `CrownConquest.x86_64`.
+- Tester instructions: `docs/TESTER_GUIDE.md`.
+
+**Not tested here:** the APK on a real phone (no Android device or emulator available) and the Windows build on Windows.

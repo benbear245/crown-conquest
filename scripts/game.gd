@@ -87,6 +87,17 @@ func _update_slow_mo(delta: float) -> void:
 
 
 func _notification(what: int) -> void:
+	# Android back button: close a panel, else open the menu, else (on the
+	# start screen) leave the app.
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and _hud != null:
+		if _hud.start_menu.visible:
+			get_tree().quit()
+		elif _hud.any_panel_open():
+			_hud.close_panels()
+			_hud.set_menu_open(false)
+		else:
+			_hud.set_menu_open(true)
+		return
 	# Pause (or, online, open the menu) when the app goes to the background.
 	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		if _hud != null and _session != null and _session.sim() != null \

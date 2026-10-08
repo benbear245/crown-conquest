@@ -18,6 +18,7 @@ const TOGGLES: Array[Array] = [
 var _checks: Dictionary = {}
 var _new_map_btn: Button
 var _title: Label
+var _report_note: Label
 
 
 func _ready() -> void:
@@ -51,10 +52,25 @@ func _ready() -> void:
 	var hints := UI.button("Show tips again", WIDTH - 32, 48, 16)
 	hints.pressed.connect(func() -> void: Settings.reset_hints())
 	v.add_child(hints)
+	var report := UI.button("Report a problem (copies details)", WIDTH - 32, 48, 16)
+	report.pressed.connect(_on_report)
+	v.add_child(report)
+	_report_note = UI.label("", 15, UI.COLOR_GOOD)
+	_report_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(_report_note)
+	var version := UI.label("Test build %s" % BugReport.version_label(), 14, UI.COLOR_DIM)
+	v.add_child(version)
 	visible = false
 
 
+# Copies device details and the recent log; the tester pastes it into a message.
+func _on_report() -> void:
+	DisplayServer.clipboard_set(BugReport.build_text())
+	_report_note.text = "Copied! Paste it into your message to the developer, with what you were doing."
+
+
 func open() -> void:
+	_report_note.text = ""
 	for key: String in _checks.keys():
 		(_checks[key] as CheckButton).set_pressed_no_signal(bool(Settings.get(key)))
 	visible = true

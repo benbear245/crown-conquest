@@ -12,6 +12,12 @@ signal start_match
 signal leave
 
 const WIDTH: int = 560
+const HOW_TO_PLAY: String = """• Place your Crown, then tap free land next to your border to grow.
+• The slider sets how many troops each tap sends. Troops grow fastest while the bar is green.
+• After 1:00, tap enemy land to attack. Take an enemy Crown's centre to knock them out.
+• Long-press your land to build; long-press a rival to spy, scout or offer a truce.
+• Hold the Shrines (◆) for bonuses. Tap ♛ Crown for upgrades.
+• Win: last Crown standing, own 60% of the land, or lead at 15:00."""
 
 var _main: VBoxContainer
 var _lobby: VBoxContainer
@@ -26,7 +32,7 @@ var _start_btn: Button
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	color = Color(0.03, 0.04, 0.07, 0.92)
+	color = Color(0.03, 0.04, 0.07, 1.0)
 	var panel := UI.panel(20)
 	UI.centre(panel, WIDTH, 100)
 	add_child(panel)
@@ -45,6 +51,9 @@ func _ready() -> void:
 	v.add_child(_status)
 	_build_main()
 	_build_lobby()
+	var version := UI.label("Test build %s — thanks for testing!" % BugReport.version_label(), 14, UI.COLOR_DIM)
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(version)
 	show_main("")
 
 
@@ -57,10 +66,18 @@ func _build_main() -> void:
 	_name_edit.text_changed.connect(func(t: String) -> void: Settings.set_text("player_name", t))
 	name_row.add_child(_name_edit)
 	_main.add_child(_menu_button("Play vs bots", func() -> void: play_bots.emit()))
+	var help := UI.label(HOW_TO_PLAY, 16)
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.custom_minimum_size = Vector2(WIDTH - 40, 0)
+	help.visible = false
+	var help_btn := UI.button("How to play", WIDTH - 40, 44, 17)
+	help_btn.pressed.connect(func() -> void: help.visible = not help.visible)
 	_main.add_child(_menu_button("Practice online (this device)", func() -> void: practice_online.emit()))
 	_main.add_child(_menu_button("Host a game on this Wi-Fi", func() -> void: host_lan.emit()))
 	var join_row := UI.hbox(8)
 	_main.add_child(join_row)
+	_main.add_child(help_btn)
+	_main.add_child(help)
 	_ip_edit = _line_edit(Settings.last_address, "Host's address, e.g. 192.168.1.20")
 	join_row.add_child(_ip_edit)
 	var join := UI.button("Join", 120)
