@@ -345,7 +345,7 @@ See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (g
 
 **Builds** (`export_presets.cfg`, see `docs/BUILDING.md`)
 - Android: `CrownConquest-v0.1.0.apk`, 27 MB, arm64, Android 7+, signed with APK Signature Scheme v2 and verified.
-- Windows: `CrownConquest-v0.1.0-windows.zip` (one .exe plus the tester guide).
+- Windows: `CrownConquest-v0.1.0-windows.7z` (one .exe plus the tester guide; 7z to stay under 30 MB).
 - Linux: `CrownConquest.x86_64`.
 - Tester instructions: `docs/TESTER_GUIDE.md`.
 

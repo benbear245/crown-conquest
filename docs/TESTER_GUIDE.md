@@ -11,7 +11,7 @@ Thanks for testing! Crown Conquest is a real-time territory game: grow your troo
 4. Open **Crown Conquest**. It plays sideways (landscape).
 
 **Windows PC**
-1. Unzip `CrownConquest-v0.1.0-windows.zip` and double-click `CrownConquest.exe`.
+1. Extract `CrownConquest-v0.1.0-windows.7z` (Windows 11: right-click → Extract All; Windows 10: use the free 7-Zip app), then double-click `CrownConquest.exe`.
 2. If Windows says "Windows protected your PC", click **More info → Run anyway** (the test build isn't signed for Windows).
 3. Use the mouse: click = tap, hold the button = long-press, drag = move the map, scroll wheel = zoom.
 
