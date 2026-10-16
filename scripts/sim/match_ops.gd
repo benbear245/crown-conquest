@@ -22,6 +22,9 @@ static func tick_placement(sim: Simulation) -> void:
 			var pos := find_valid_crown_position(state)
 			if pos.x >= 0:
 				place_crown(sim, p, pos.x, pos.y)
+	# The tutorial starts as soon as the player has placed their Crown.
+	if sim.passive_bots and _all_humans_placed(state):
+		state.placement_time_left = 0.0
 	if state.placement_time_left > 0.0:
 		return
 	for p in state.players:
@@ -31,6 +34,13 @@ static func tick_placement(sim: Simulation) -> void:
 	ShrinesOps.place_shrines(sim)
 	state.phase = Balance.PHASE_MATCH
 	sim.emit({"type": "match_started"})
+
+
+static func _all_humans_placed(state: GameState) -> bool:
+	for p in state.players:
+		if not p.is_bot and p.crown_x < 0:
+			return false
+	return true
 
 
 static func place_crown(sim: Simulation, player: Player, cx: int, cy: int) -> void:

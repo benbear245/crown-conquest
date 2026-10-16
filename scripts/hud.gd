@@ -19,11 +19,13 @@ var bottom_bar: HudBottomBar
 var attacks: HudAttacks
 var banners: HudBanners
 var hints: HudHints
+var tutorial: HudTutorial
 var build_menu: HudBuildMenu
 var keep_panel: HudKeepPanel
 var enemy_panel: HudEnemyPanel
 var menu: HudMenu
-var end_overlay: HudEndOverlay
+var recap: HudRecap
+var victory_fx: VictoryFx
 var start_menu: HudStartMenu
 
 var _sim: Simulation
@@ -40,6 +42,7 @@ func _ready() -> void:
 	bottom_bar = _add(HudBottomBar.new())
 	hints = _add(HudHints.new())
 	banners = _add(HudBanners.new())
+	tutorial = _add(HudTutorial.new())
 	_mode_label = _add(UI.label("", 20, UI.COLOR_WARN))
 	_mode_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_mode_label.offset_left = -400
@@ -52,7 +55,8 @@ func _ready() -> void:
 	build_menu = _add(HudBuildMenu.new())
 	keep_panel = _add(HudKeepPanel.new())
 	enemy_panel = _add(HudEnemyPanel.new())
-	end_overlay = _add(HudEndOverlay.new())
+	recap = _add(HudRecap.new())
+	victory_fx = _add(VictoryFx.new())
 	menu = _add(HudMenu.new())
 	start_menu = _add(HudStartMenu.new())
 	_connect_signals()
@@ -71,7 +75,7 @@ func _connect_signals() -> void:
 	menu.new_map_pressed.connect(func() -> void:
 		set_menu_open(false)
 		new_map_requested.emit())
-	end_overlay.play_again_pressed.connect(func() -> void: new_map_requested.emit())
+	recap.play_again_pressed.connect(func() -> void: new_map_requested.emit())
 	minimap.jump_requested.connect(func(p: Vector2) -> void: minimap_jump.emit(p))
 	attacks.retreat_pressed.connect(func(i: int) -> void: command.emit("retreat", [i]))
 	bottom_bar.crown_tapped.connect(func() -> void:
@@ -106,7 +110,9 @@ func _on_ability_pressed(ability_id: int) -> void:
 func setup(sim: Simulation, map_texture: Texture2D) -> void:
 	_sim = sim
 	minimap.setup(sim.state, map_texture)
-	end_overlay.reset()
+	recap.reset()
+	tutorial.visible = false
+	victory_fx.stop()
 	banners.clear_all()
 	close_panels()
 	set_mode_text("")
@@ -120,6 +126,7 @@ func apply_layout() -> void:
 	attacks.apply_side(lh)
 	bottom_bar.apply_side(lh)
 	build_menu.apply_side(lh)
+	tutorial.apply_side(lh)
 
 
 func send_fraction() -> float:
@@ -161,15 +168,17 @@ func update_from_state(camera_view: Rect2) -> void:
 	bottom_bar.refresh(_sim, local)
 	keep_panel.refresh(_sim, local)
 	enemy_panel.refresh(_sim, local)
-	end_overlay.refresh(_sim, local)
+	recap.refresh(_sim, local)
 	minimap.set_view(camera_view)
 	# Panels are modal: banners and tips step aside until they close.
-	var modal: bool = any_panel_open() or end_overlay.visible
+	var modal: bool = any_panel_open() or recap.visible
 	banners.visible = not modal
-	hints.suppressed = modal
+	hints.suppressed = modal or tutorial.visible
 	_placement_label.visible = state.phase == Balance.PHASE_PLACEMENT
 	if _placement_label.visible:
-		_placement_label.text = "Tap a plains, forest or hill tile to place your Crown  (%ds)" % maxi(0, ceili(state.placement_time_left))
+		_placement_label.text = "Tap a plains, forest or hill tile to place your Crown"
+		if not tutorial.visible:
+			_placement_label.text += "  (%ds)" % maxi(0, ceili(state.placement_time_left))
 	_offer_hints(state, local)
 
 
@@ -183,7 +192,7 @@ func _offer_hints(state: GameState, local: Player) -> void:
 		hints.offer("expand")
 	elif t < 45.0:
 		hints.offer("sweet_spot")
-	elif t >= Balance.PEACE_PERIOD_SEC and t < Balance.PEACE_PERIOD_SEC + 20.0:
+	elif t >= state.peace_sec and t < state.peace_sec + 20.0:
 		hints.offer("attack")
 	elif t >= 85.0 and t < 110.0:
 		hints.offer("build")

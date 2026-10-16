@@ -23,6 +23,8 @@ var _mode: String = ""
 var _boat_port: Vector2i = Vector2i(-1, -1)
 var _last_wall_tile: Vector2i = Vector2i(-1, -1)
 var _colorblind_shown: bool = false
+var _recorder: MatchRecorder
+var _tutorial: Tutorial
 
 
 func _ready() -> void:
@@ -36,6 +38,17 @@ func _ready() -> void:
 	_hud.minimap_jump.connect(func(p: Vector2) -> void: _camera.jump_to(p))
 	_hud.ability_became_ready.connect(_on_ability_ready)
 	_hud.target_mode_requested.connect(_set_mode)
+	_hud.tutorial.next_pressed.connect(func() -> void:
+		if _tutorial != null:
+			_tutorial.press_next())
+	_hud.tutorial.skip_pressed.connect(func() -> void:
+		if _tutorial != null:
+			_tutorial.skipped = true
+			Profile.skip_tutorial()
+			_hud.tutorial.visible = false)
+	_hud.recap.leveled_up.connect(func(_level: int) -> void:
+		_audio.play("ability_ready")
+		Settings.vibrate(80))
 	_hud.menu_toggled.connect(func(open: bool) -> void:
 		if _session != null:
 			_session.paused = open)
@@ -47,6 +60,8 @@ func _ready() -> void:
 
 func _on_session_changed(session: GameSession) -> void:
 	_session = session
+	_recorder = null
+	_tutorial = null
 	if _session != null:
 		_session.match_ready.connect(_on_match_ready)
 
@@ -54,6 +69,10 @@ func _on_session_changed(session: GameSession) -> void:
 # A new match is ready to draw (local start, or the host's first update).
 func _on_match_ready() -> void:
 	var cur: Simulation = _session.sim()
+	Look.apply(cur.state)
+	_recorder = MatchRecorder.new(_session.setup, _session.online)
+	var is_tutorial: bool = _session.setup != null and _session.setup.mode == MatchSetup.MODE_TUTORIAL
+	_tutorial = Tutorial.new() if is_tutorial else null
 	_map.setup(cur.state)
 	_overlay.setup(cur.state, cur.local_player_id)
 	_hud.setup(cur, _map.texture())
@@ -73,8 +92,60 @@ func _process(delta: float) -> void:
 		return
 	for e: Dictionary in events:
 		GameFeel.handle(self, e)
+		if _recorder != null:
+			_recorder.on_event(_session.sim(), e)
+	_record()
+	_update_tutorial()
 	_map.render()
 	_hud.update_from_state(_camera.visible_world_rect())
+
+
+# Feeds the recorder and, once the match is over for you, saves your
+# progress and fills in the recap.
+func _record() -> void:
+	if _recorder == null:
+		return
+	var cur: Simulation = _session.sim()
+	_recorder.observe(cur)
+	if not _recorder.should_finish(cur):
+		return
+	_recorder.finished = true
+	var summary: Dictionary = _recorder.summary(cur)
+	var result: Dictionary
+	if _recorder.mode == MatchSetup.MODE_TUTORIAL:
+		var finished: bool = bool(summary["won"]) and _tutorial != null and not _tutorial.skipped
+		result = Profile.complete_tutorial() if finished else {}
+	else:
+		result = Profile.record_match(summary)
+	_recorder.result = result
+	match _recorder.mode:
+		MatchSetup.MODE_TUTORIAL:
+			_hud.recap.set_play_again_text("Replay tutorial")
+		MatchSetup.MODE_DAILY:
+			_hud.recap.set_play_again_text("Retry daily")
+		MatchSetup.MODE_ONLINE:
+			_hud.recap.set_play_again_text("Back to menu")
+		_:
+			_hud.recap.set_play_again_text("Play again")
+	_hud.recap.show_result(_recorder, cur, result)
+
+
+func _update_tutorial() -> void:
+	if _tutorial == null:
+		return
+	var cur: Simulation = _session.sim()
+	_tutorial.update(cur)
+	if _tutorial.is_done() or cur.state.phase == Balance.PHASE_ENDED:
+		_hud.tutorial.visible = false
+		return
+	var arrow := Vector2(-1, -1)
+	var world: Vector2 = _tutorial.target_world(cur)
+	if world.x >= 0.0:
+		arrow = _camera.world_to_screen(world)
+	elif _tutorial.target_ability() >= 0:
+		var r: Rect2 = _hud.bottom_bar.ability_rect(_tutorial.target_ability())
+		arrow = Vector2(r.get_center().x, r.position.y)
+	_hud.tutorial.show_step(_tutorial.step, Tutorial.STEPS.size(), _tutorial.text(cur), _tutorial.needs_next_button(), arrow)
 
 
 # Slow motion uses Engine.time_scale, so it is timed in real seconds.
@@ -108,7 +179,10 @@ func _notification(what: int) -> void:
 func _send(cmd: String, args: Array, on_result: Callable = Callable()) -> void:
 	if _session == null:
 		return
+	var rec: MatchRecorder = _recorder
 	_session.send(cmd, args, func(ok: bool) -> void:
+		if rec != null:
+			rec.on_command(cmd, args, ok)
 		if ok:
 			_audio.play("tap", -6.0)
 		if on_result.is_valid():
@@ -158,7 +232,7 @@ func _on_tap(screen_pos: Vector2) -> void:
 				_audio.play("attack")
 				_hud.hints.done("attack")
 			elif state.is_peace():
-				_hud.banners.push_text("Peace — no attacks until %s" % GameState.format_time(Balance.PEACE_PERIOD_SEC), UI.COLOR_WARN, 2.0))
+				_hud.banners.push_text("Peace — no attacks until %s" % GameState.format_time(state.peace_sec), UI.COLOR_WARN, 2.0))
 
 
 func _tap_in_mode(tile: Vector2i) -> void:
@@ -263,6 +337,7 @@ func _on_settings_changed() -> void:
 	if Settings.colorblind != _colorblind_shown:
 		_colorblind_shown = Settings.colorblind
 		if _session != null and _session.sim() != null:
+			Look.apply(_session.sim().state)
 			_map.repaint_all()
 
 

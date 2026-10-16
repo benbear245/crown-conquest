@@ -17,7 +17,8 @@ var _seats: Dictionary = {}         # peer_id -> player_id once the match starts
 var _host_peer: int = -1
 var _acks: Dictionary = {}          # peer_id -> Array of [seq, ok]
 var _tick_accumulator: float = 0.0
-var _human_count: int = 0           # seats 1.._human_count belong to people
+var _human_count: int = 0
+var _cosmetics: Dictionary = {}     # peer_id -> chosen looks (colour, pattern, ...)           # seats 1.._human_count belong to people
 
 
 func _init(host_peer_id: int) -> void:
@@ -58,7 +59,12 @@ func receive(peer_id: int, packet: PackedByteArray) -> void:
 			_on_hello(peer_id, msg)
 		"start":
 			if peer_id == _host_peer and not started:
-				start_match(int(Time.get_unix_time_from_system()))
+				var setup := MatchSetup.new()
+				if typeof(msg.get("setup")) == TYPE_DICTIONARY:
+					setup = MatchSetup.from_dict(msg["setup"])
+				setup.mode = MatchSetup.MODE_ONLINE
+				setup.match_seed = int(Time.get_unix_time_from_system())
+				start_match(setup)
 		"cmd":
 			_on_command(peer_id, msg)
 
@@ -77,6 +83,7 @@ func _on_hello(peer_id: int, msg: Dictionary) -> void:
 		_send(peer_id, {"t": "bye", "msg": "This game is full."})
 		return
 	_names[peer_id] = _unique_name(wanted)
+	_cosmetics[peer_id] = Cosmetics.sanitize(msg.get("look", {}))
 	_order.append(peer_id)
 	if _host_peer < 0:
 		_host_peer = peer_id
@@ -121,10 +128,12 @@ func _send_lobby() -> void:
 
 # --- The match -----------------------------------------------------------------
 
-# Humans take the first seats in join order; bots fill the rest.
-func start_match(match_seed: int) -> void:
+# Humans take the first seats in join order; bots fill the rest (at least
+# enough seats for everyone who joined).
+func start_match(setup: MatchSetup) -> void:
+	setup.bots = maxi(setup.bots, _order.size() - 1)
 	sim = Simulation.new()
-	sim.start_default_match(match_seed)
+	sim.start_with(setup)
 	sim.flashes = false
 	_human_count = mini(_order.size(), sim.state.players.size())
 	for k in range(_human_count):
@@ -132,6 +141,7 @@ func start_match(match_seed: int) -> void:
 		var p: Player = sim.state.players[k]
 		p.is_bot = false
 		p.display_name = _names[peer_id]
+		p.cosmetic = _cosmetics.get(peer_id, {})
 		_seats[peer_id] = p.id
 	started = true
 	_take_tiles()

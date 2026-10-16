@@ -25,6 +25,8 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var phase: int = Balance.PHASE_PLACEMENT
 var placement_time_left: float = 0.0
 var match_time: float = 0.0
+# Rule overrides for special matches (the tutorial); normal matches use Balance.
+var peace_sec: float = Balance.PEACE_PERIOD_SEC
 
 # tile idx -> player_id for any of the 9 Crown tiles (3x3 block).
 var crown_tiles: Dictionary = {}
@@ -74,7 +76,7 @@ func is_final_siege() -> bool:
 
 
 func is_peace() -> bool:
-	return match_time < Balance.PEACE_PERIOD_SEC
+	return match_time < peace_sec
 
 
 func configure(w: int, h: int, seed_value: int) -> void:
@@ -107,6 +109,7 @@ func configure(w: int, h: int, seed_value: int) -> void:
 	tick_count = 0
 	phase = Balance.PHASE_PLACEMENT
 	placement_time_left = Balance.PLACEMENT_PHASE_SEC
+	peace_sec = Balance.PEACE_PERIOD_SEC
 	match_time = 0.0
 	_usable_tiles = -1
 

@@ -69,7 +69,7 @@ func _draw_crowns() -> void:
 		var col: Color = Color(1.0, 0.85, 0.2)
 		if p.crown_alert_until > _state.match_time:
 			col = col.lerp(Color(1, 0.2, 0.2), 0.5 + 0.5 * sin(_time * 10.0))
-		_draw_crown_icon(centre + Vector2(0, -3.2), 2.2, col)
+		Look.draw_crown(self, Look.crown_of(p.id), centre + Vector2(0, -3.2), 2.2, col)
 		if AbilitiesOps.is_crown_shield_active(p, _state.match_time):
 			draw_arc(centre, float(p.crown_zone_radius()) + 0.5, 0.0, TAU, 48, Color(0.5, 0.8, 1.0, 0.8), 0.4)
 		if p.crown_move_to.x >= 0:
@@ -77,18 +77,6 @@ func _draw_crowns() -> void:
 			var a: float = 0.4 + 0.4 * sin(_time * 8.0)
 			draw_rect(Rect2(to - Vector2(1.5, 1.5), Vector2(3, 3)), Color(1, 0.9, 0.3, a), false, 0.3)
 			draw_dashed_line(centre, to, Color(1, 0.9, 0.3, 0.6), 0.25, 1.0)
-
-
-func _draw_crown_icon(base: Vector2, size: float, col: Color) -> void:
-	var w: float = size
-	var pts := PackedVector2Array([
-		base + Vector2(-w, 0.6 * w), base + Vector2(-w, -0.3 * w), base + Vector2(-0.5 * w, 0.1 * w),
-		base + Vector2(0, -0.6 * w), base + Vector2(0.5 * w, 0.1 * w), base + Vector2(w, -0.3 * w),
-		base + Vector2(w, 0.6 * w),
-	])
-	draw_colored_polygon(pts, col)
-	pts.append(pts[0])
-	draw_polyline(pts, Color(0.2, 0.12, 0.0), 0.2)
 
 
 func _draw_shrines() -> void:

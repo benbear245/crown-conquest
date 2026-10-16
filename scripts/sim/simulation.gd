@@ -14,6 +14,10 @@ var local_player_id: int = 1
 var headless: bool = false
 # Capture flashes are drawing-only; an online server leaves them to clients.
 var flashes: bool = true
+# The kind of match being played (skirmish, daily, tutorial, online).
+var setup: MatchSetup = MatchSetup.new()
+# Tutorial bots only grab free land: no attacks, buildings or abilities.
+var passive_bots: bool = false
 var _final_siege_announced: bool = false
 # Cached average land of alive players for Underdog checks, and the Rising
 # Empire (-1 if nobody owns > 30% of the map). Refreshed once a second.
@@ -27,7 +31,18 @@ func start_default_match(match_seed: int = 0) -> void:
 	start_match(Balance.MAP_SIZE_MEDIUM, Balance.MAP_TYPE_CONTINENT, match_seed, 7)
 
 
-func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> void:
+# Starts the match a MatchSetup describes.
+func start_with(s: MatchSetup) -> void:
+	setup = s.clamped()
+	start_match(setup.size, setup.map_type, setup.match_seed, setup.bots, setup.difficulty)
+	passive_bots = setup.mode == MatchSetup.MODE_TUTORIAL
+	if passive_bots:
+		state.peace_sec = Balance.TUTORIAL_PEACE_SEC
+		state.placement_time_left = Balance.TUTORIAL_PLACEMENT_SEC
+
+
+func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1,
+		difficulty: int = MatchSetup.DIFFICULTY_MIXED) -> void:
 	size_preset = size
 	map_type = mt
 	_final_siege_announced = false
@@ -38,10 +53,10 @@ func start_match(size: int, mt: int, match_seed: int, num_bots: int = -1) -> voi
 	MapGen.generate(state, mt)
 	if num_bots < 0:
 		num_bots = MapGen.players_for_size(size) - 1
-	_setup_players(num_bots)
+	_setup_players(num_bots, difficulty)
 
 
-func _setup_players(num_bots: int) -> void:
+func _setup_players(num_bots: int, difficulty: int) -> void:
 	var total: int = clampi(num_bots + 1, 1, Balance.PLAYER_COLORS.size() - 1)
 	for i in range(total):
 		var p := Player.new()
@@ -50,9 +65,9 @@ func _setup_players(num_bots: int) -> void:
 			p.display_name = "You"
 			p.is_bot = false
 		else:
-			p.display_name = Balance.generate_name(state.rng)
+			p.display_name = BotNames.generate(state.rng)
 			p.is_bot = true
-			p.difficulty = _mixed_difficulty(i)
+			p.difficulty = _mixed_difficulty(i) if difficulty == MatchSetup.DIFFICULTY_MIXED else difficulty
 			p.personality = state.rng.randi() % 4
 			p.think_timer = state.rng.randf_range(0.5, 2.0)
 		state.players.append(p)

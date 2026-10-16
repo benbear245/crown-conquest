@@ -6,6 +6,8 @@ extends GameSession
 # player, or practice on one device) or an ENetLink (another phone).
 
 var player_name: String = "Player"
+var look: Dictionary = {}          # this player's cosmetics, shown to everyone
+var start_setup: Dictionary = {}   # match settings the host asks for
 
 var _link: RefCounted              # LoopbackLink or ENetLink
 var _mirror: Mirror = Mirror.new()
@@ -29,7 +31,7 @@ func sim() -> Simulation:
 func update(_delta: float) -> Array:
 	if not _hello_sent and _link.is_connected_to_server():
 		_hello_sent = true
-		_link.send(Protocol.encode({"t": "hello", "name": player_name, "v": Protocol.VERSION}))
+		_link.send(Protocol.encode({"t": "hello", "name": player_name, "v": Protocol.VERSION, "look": look}))
 	var events: Array = []
 	for packet: PackedByteArray in _link.receive():
 		var msg: Dictionary = Protocol.decode(packet)
@@ -59,7 +61,7 @@ func send(cmd: String, args: Array, on_result: Callable = Callable()) -> void:
 
 
 func request_start() -> void:
-	_link.send(Protocol.encode({"t": "start"}))
+	_link.send(Protocol.encode({"t": "start", "setup": start_setup}))
 
 
 func close() -> void:

@@ -56,6 +56,9 @@ static func handle(game: Node, e: Dictionary) -> void:
 			audio.set_siege_music(false)
 		"match_ended":
 			audio.play("crown_fall")
+			var w: Player = sim.state.get_player(int(e["winner_id"]))
+			if w != null:
+				hud.victory_fx.play(int(w.cosmetic.get(Cosmetics.CAT_VICTORY, 0)), Balance.color_for_player(w.id))
 
 
 static func _crown_fell(game: Node, e: Dictionary, me: int) -> void:

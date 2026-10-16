@@ -20,15 +20,27 @@ const MOVE_TRUCE: int = 5
 static func tick(sim: Simulation, p: Player) -> void:
 	# Ability thinking runs on its own slower timer so bots don't spam buttons.
 	p.ability_think_timer -= Balance.TICK_DELTA
-	if p.ability_think_timer <= 0.0:
+	if p.ability_think_timer <= 0.0 and not sim.passive_bots:
 		p.ability_think_timer = sim.state.rng.randf_range(1.0, 2.0)
 		BotTactics.use_abilities(sim, p)
 	p.think_timer -= Balance.TICK_DELTA
 	if p.think_timer > 0.0:
 		return
 	p.think_timer = _think_interval(p.difficulty, sim.state.rng)
+	if sim.passive_bots:
+		_think_passive(sim, p)
+		return
 	BotTactics.manage_attacks(sim, p)
 	_think(sim, p)
+
+
+# Tutorial bots: grab free land now and then, nothing else.
+static func _think_passive(sim: Simulation, p: Player) -> void:
+	var frontier: PackedInt32Array = TerritoryOps.collect_frontier(sim.state, p)
+	if frontier.is_empty() or p.expansion_troops > 0.0 or p.troops < 40.0:
+		return
+	var pos: Vector2i = sim.state.idx_to_xy(frontier[sim.state.rng.randi_range(0, frontier.size() - 1)])
+	sim.player_expand(p.id, pos.x, pos.y, 0.3)
 
 
 static func _think(sim: Simulation, p: Player) -> void:

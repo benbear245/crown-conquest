@@ -112,6 +112,11 @@ func _on_crown_pressed() -> void:
 	crown_tapped.emit()
 
 
+# Screen rectangle of an ability button (the tutorial points at it).
+func ability_rect(ability_id: int) -> Rect2:
+	return _ability_buttons[ability_id].get_global_rect()
+
+
 func refresh(sim: Simulation, local: Player) -> void:
 	var now: float = sim.state.match_time
 	var in_match: bool = sim.state.phase == Balance.PHASE_MATCH

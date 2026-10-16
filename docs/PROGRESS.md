@@ -350,3 +350,32 @@ See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (g
 - Tester instructions: `docs/TESTER_GUIDE.md`.
 
 **Not tested here:** the APK on a real phone (no Android device or emulator available) and the Windows build on Windows.
+
+## v0.2.0: Match setup, progression, looks, daily play and tutorial
+
+**Match setup and Quick play**
+- New start menu (`scripts/ui/hud_start_menu.gd`): your level bar, a big Quick play button showing your last setup, Play vs bots, Daily Challenge (with today's map type and best score), Tutorial, Customize, Progress, today's challenges and the Online section.
+- Match setup screen (`menu_setup_panel.gd`): map size, map type, number of bots and difficulty (Mixed or one level for all). `MatchSetup` (`scripts/sim/match_setup.gd`) carries these to `Simulation.start_with()` and, when hosting online, to the server.
+- Bot names are now generated from the match seed (`BotNames`).
+
+**Recap, XP and levels**
+- `MatchRecorder` watches the match from your side (land every 5 s, best moments, Crowns, Shrines, spies, truces, Forts, Walls, Ports, Bombards) and builds a summary when the match ends or your Crown falls.
+- `Profile` autoload saves XP, stats, achievements, looks, the last setup, daily challenge progress and Daily scores to `user://profile.json` (written to a temp file, then renamed).
+- Recap screen (`hud_recap.gd`): land graph, best moment, XP lines, animated level bar with a level-up moment, unlocks, achievements, challenges and Daily score.
+
+**Looks and achievements**
+- `Cosmetics` catalogue and unlock levels; `Look` draws chosen colours (with clash swapping), 6 patterns and 8 Crown icons on the map; titles show when rivals are inspected and on the recap; victory effects (Fireworks, Confetti, Golden Rain) play for the winner.
+- Customize screen with a live preview; Progress screen with stats, challenges and a 16-trophy shelf.
+- Online: looks travel in the hello message, are checked by the server and are shown to everyone. Protocol version 2 (older builds can't join).
+
+**Daily play**
+- 3 daily challenges from an 11-challenge pool, the same for everyone each day, +150 XP each.
+- Daily Challenge map: same seed and settings for everyone by date; score and best saved.
+
+**Tutorial**
+- Guided match against 1 passive Easy bot with a 0:30 peace; 8 steps with an arrow and Skip. +250 XP and the Graduate title the first time.
+
+**Tested**
+- Seven full matches through the real screens (Quick play, Daily, tutorial, Small vs Hard, Large Archipelago with 11 bots, two practice online): every one ended with the recap shown and progress saved.
+- A scripted player finished all 8 tutorial steps and won (2:16, +350 XP).
+- Balance simulator (6 matches) and the online data test still run as before. No script errors or warnings (LSP check: 0 diagnostics).

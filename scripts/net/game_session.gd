@@ -14,6 +14,7 @@ signal lobby_changed(names: Array, is_host: bool)
 signal ended(reason: String)
 
 var online: bool = false
+var setup: MatchSetup                # what kind of match this is (null when joining)
 var paused: bool = false
 
 

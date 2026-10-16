@@ -9,8 +9,12 @@ var _sim: Simulation = Simulation.new()
 var _tick_accumulator: float = 0.0
 
 
-func start(match_seed: int) -> void:
-	_sim.start_default_match(match_seed)
+func start(s: MatchSetup, look: Dictionary) -> void:
+	setup = s
+	_sim.start_with(s)
+	var me: Player = _sim.state.get_player(_sim.local_player_id)
+	if me != null:
+		me.cosmetic = Cosmetics.sanitize(look)
 	match_ready.emit()
 
 

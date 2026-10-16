@@ -5,10 +5,10 @@ extends RefCounted
 # with a "t" (type) key, packed with var_to_bytes (no objects allowed) and
 # compressed when large. First byte of a packet says whether it is compressed.
 #
-# Client -> server:  hello {name, v}   cmd {seq, c, a}   start {}
+# Client -> server:  hello {name, v, look}   cmd {seq, c, a}   start {setup}
 # Server -> client:  lobby {names, host}   full {...}   tick {...}   bye {msg}
 
-const VERSION: int = 1
+const VERSION: int = 2
 const DEFAULT_PORT: int = 24680
 const MAX_PLAYERS: int = 8
 const MAX_PACKET_BYTES: int = 1 << 20

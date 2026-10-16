@@ -237,9 +237,11 @@ Variety comes from modes and map types, and the reason to keep playing comes fro
 
 | Mode | How it works |
 | --- | --- |
-| Skirmish | You vs bots. Choose map size, map type, number of bots, and difficulty |
+| Quick play | One big button on the start menu that starts a Skirmish with the last settings you chose (Medium, Continent, 7 Mixed bots at first) |
+| Skirmish | You vs bots. "Play vs bots" opens match setup: map size (Small / Medium / Large), map type (Continent / Archipelago / Highlands / Random), number of bots (1–7 on Small, 1–11 otherwise) and difficulty (Mixed, Easy, Normal or Hard for all bots). Starting remembers the choice for Quick play |
 | Teams | 4 teams of 2: you and a bot ally vs 3 bot pairs. Allies can't attack each other and can send each other 20% of their troops. The last team with a Crown wins |
-| Daily Challenge | Everyone gets the same map and settings each day (the date sets the map seed). Score = peak land % + a time bonus for winning fast. Your best score is saved |
+| Daily Challenge | Everyone gets the same map and settings each day: the date sets the seed and the map type, always Medium with 7 Mixed bots. Score = 10 per 1% of peak land, plus 1,000 for a win and 2 per second left before 15:00. Your best score for the day is saved and shown on the start menu |
+| Tutorial | A guided first match on a Small map against 1 Easy bot that only grows and never attacks, with a 0:30 peace. Offered on the start menu until done; can be replayed or skipped. See "Tutorial" |
 | Online | Host a game on your Wi-Fi or join one by address; practice online on one device. Bots fill empty seats. See "Online play" |
 
 ### Online play
@@ -270,11 +272,41 @@ Map types: **Continent** (one big landmass with lakes), **Archipelago** (islands
 
 ### Progression
 
-- **XP per match:** 100 for playing, +10 per 1% of peak land, +150 per Crown captured, +300 for a win. Hard matches give ×1.5.
+Progress is saved on the phone (user://profile.json) and counts for every match: offline, Daily Challenge and online. It is recorded once, when the match ends or your Crown falls.
+
+- **XP per match:** 100 for playing, +10 per 1% of peak land, +150 per Crown captured, +300 for a win. Matches where every bot is Hard give ×1.5.
+- **Other XP:** +150 per daily challenge, +100 per achievement, +250 once for finishing the tutorial.
 - **Levels:** level n needs 500 + 100 × n XP.
-- **Unlocks:** 16 territory colours, 6 patterns (stripes, dots, checks, waves, scales, bricks), 8 Crown icons, titles, and victory effects like fireworks.
-- **Achievements**, for example: Kingslayer (take 3 Crowns in one match), Underdog (win after being the smallest player at 3:00), Island King (win on Archipelago using 3 Ports), Speedrun (win in under 6 minutes), Dominion (win by owning 60% of the land).
-- **Stats screen:** matches, wins, win rate, Crowns captured, fastest win, best Daily score.
+- **Match recap** (replaces the old end screen): result, a graph of your land over time, your best moment (for example "Took Lord Hale's Crown at 4:12"), each XP line, an animated level bar with a level-up moment, and anything new: unlocks, achievements, daily challenges done and the Daily Challenge score. Buttons: Play again (Retry daily / Replay tutorial), Watch, Main menu.
+- **Unlocks by level** (Customize screen; locked items say how to get them):
+
+| Category | Items |
+| --- | --- |
+| Territory colour | 16: Royal Blue, Crimson, Emerald, Gold (start), Amethyst (2), Ember (5), Teal (8), Rose (11), Moss (14), Bronze (17), Snow (19), Slate (21), Midnight (23), Coral (26), Jade (28), Obsidian (30) |
+| Pattern | Plain (start), Stripes (3), Dots (6), Checks (10), Waves (13), Scales (18), Bricks (22) |
+| Crown icon | Crown (start), Star (4), Shield (9), Tower (12), Flame (16), Gem (20), Laurel (24), High Crown (27) |
+| Title | Squire (2), Knight (5), Baron (10), Warlord (15), Emperor (20), Legend (25); Kingslayer, Spymaster, Underdog, Island King, Conqueror and Graduate come from achievements |
+| Victory effect | Fireworks (7), Confetti (15), Golden Rain (25) |
+
+- **How looks show:** your colour, pattern and Crown icon are drawn on the map; your title shows as "Name the Knight" when rivals inspect you and on the recap; the winner's victory effect plays over the screen. Online, everyone sees everyone's looks. A chosen colour that clashes with another player's swaps with that player's normal colour; colour-blind mode always uses the safe palette.
+- **Achievements** (trophy shelf on the Progress screen): First Victory, Kingslayer (3 Crowns in one match), Dominion (win by 60% land), Underdog (win after being the smallest at 3:00), Swift Conqueror (win in under 6:00), Spymaster (5 successful spy actions in one match), High Priest (hold every Shrine at once), Island King (win on Archipelago after building 3 Ports), Giant Slayer (win against only Hard bots), Peacemaker (3 truces in one match), Great Wall (40 Wall tiles in one match), Veteran (25 matches), Conqueror (50 Crowns total), Daily Ruler (finish a Daily Challenge), Friendly Rivals (finish an online match), Graduate (finish the tutorial).
+- **Daily challenges:** 3 a day, the same for everyone (picked from the date), shown on the start menu with progress, +150 XP each. Pool: take 2 Crowns, win a match, capture 2 Shrines, 3 successful spy actions, build 3 Forts, make 2 truces, fire Bombard twice, play 3 matches, own 25% of the map in one match, still have your Crown at 8:00, build 20 Wall tiles.
+- **Progress screen:** level, matches, wins, Crowns taken, best land, fastest win, online matches, today's challenges and the trophy shelf.
+
+### Tutorial
+
+A guided match (Small Continent map, fixed seed, 1 Easy bot that only grows). The match starts as soon as you place your Crown, and peace lasts 0:30. A card shows one step at a time with a bouncing arrow at the target and a "Skip tutorial" button:
+
+1. Place your Crown.
+2. Grow: tap free land until your land doubles.
+3. The troop sweet spot (tap Next).
+4. Long-press your land and build a Fort.
+5. Wait for peace to end.
+6. Attack the bot's land.
+7. Use Crown Shield.
+8. Take the bot's Crown.
+
+Winning gives +250 XP and the Graduate achievement (once). Skipping marks the tutorial as seen with no reward.
 
 If you ever earn money from the game, sell only cosmetics and "remove ads". Never sell troops, powers or upgrades, because pay-to-win ruins balance.
 
@@ -549,7 +581,7 @@ Make sure none of this slows the game down. Run it, fix errors, then commit as "
 
 ```text
 Following docs/DESIGN.md "Modes" and "Maps", add:
-- Main menu: Play (Skirmish), Teams, Daily Challenge, Customize, Stats, Settings.
+- Main menu: Quick play, Play vs bots (match setup), Daily Challenge, Tutorial, Customize, Progress, Online. (Teams is not built yet.)
 - Skirmish setup: map size, map type, number of bots, difficulty (Easy/Normal/Hard/Mixed), optional seed.
 - Teams mode: 4 teams of 2 with a bot ally. Allies can't attack each other, there's a "Send 20% to ally" button, and the team wins together.
 - Daily Challenge: seed from today's date, fixed settings, the score from the design, best score saved.

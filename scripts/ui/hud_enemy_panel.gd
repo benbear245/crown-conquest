@@ -73,7 +73,7 @@ func refresh(sim: Simulation, local: Player) -> void:
 		visible = false
 		return
 	var now: float = state.match_time
-	_name.text = target.display_name
+	_name.text = Look.name_with_title(target)
 	_name.add_theme_color_override("font_color", Balance.color_for_player(target.id).lightened(0.2))
 	var info: Array[String] = ["Land %.1f%%" % (100.0 * state.land_fraction(target))]
 	if target.is_bot:

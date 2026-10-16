@@ -112,10 +112,10 @@ func refresh(sim: Simulation, local: Player) -> void:
 func _update_timer(state: GameState) -> void:
 	match state.phase:
 		Balance.PHASE_PLACEMENT:
-			_timer.text = "Place Crown  0:%02d" % maxi(0, ceili(state.placement_time_left))
+			_timer.text = "Place Crown  %s" % GameState.format_time(ceilf(maxf(0.0, state.placement_time_left)))
 		Balance.PHASE_MATCH:
 			if state.is_peace():
-				_timer.text = "Peace ends  %s" % GameState.format_time(Balance.PEACE_PERIOD_SEC - state.match_time)
+				_timer.text = "Peace ends  %s" % GameState.format_time(state.peace_sec - state.match_time)
 			elif state.is_final_siege():
 				_timer.text = "Final Siege  %s" % GameState.format_time(state.match_time)
 			else:

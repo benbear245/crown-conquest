@@ -91,6 +91,7 @@ static func accept(sim: Simulation, a_id: int, b_id: int) -> void:
 	var expires: float = state.match_time + Balance.TRUCE_DURATION_SEC
 	a.active_truces[b_id] = expires
 	b.active_truces[a_id] = expires
+	sim.emit({"type": "truce_made", "a_id": a_id, "b_id": b_id})
 	sim.announce("Truce — %s and %s" % [a.display_name, b.display_name])
 
 

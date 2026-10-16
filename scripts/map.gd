@@ -91,6 +91,8 @@ func _base_color_for_tile(i: int) -> Color:
 		color = Balance.RUINS_COLOR.lerp(terrain_color, Balance.OWNER_TERRAIN_TINT)
 	elif owner_id != 0:
 		color = Balance.color_for_player(owner_id).lerp(terrain_color, Balance.OWNER_TERRAIN_TINT)
+		var xy: Vector2i = _state.idx_to_xy(i)
+		color = Look.patterned(color, Look.pattern_of(owner_id), xy.x, xy.y)
 	# Shrine sanctum: a pale glow so it reads as holy ground at any zoom.
 	if _state.shrine_at_tile.has(i):
 		var s: Shrine = _state.shrine_at_tile[i]

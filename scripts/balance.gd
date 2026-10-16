@@ -318,9 +318,17 @@ const XP_FOR_WIN: int = 300
 const XP_HARD_MATCH_MULT: float = 1.5
 const LEVEL_XP_BASE: int = 500
 const LEVEL_XP_PER_LEVEL: int = 100
-const UNLOCK_COLORS_COUNT: int = 16
-const UNLOCK_PATTERNS_COUNT: int = 6
-const UNLOCK_CROWN_ICONS_COUNT: int = 8
+const XP_TUTORIAL: int = 250
+const XP_PER_DAILY_CHALLENGE: int = 150           # each of the day's challenges
+const XP_PER_ACHIEVEMENT: int = 100
+const DAILY_CHALLENGES_PER_DAY: int = 3
+# Daily Challenge map score: peak land + a bonus for winning fast.
+const DAILY_SCORE_PER_LAND_PCT: int = 10
+const DAILY_SCORE_WIN_BONUS: int = 1000
+const DAILY_SCORE_PER_SEC_UNDER_LIMIT: int = 2    # per second left on the 15:00 clock
+# Tutorial match rules (only used by the tutorial).
+const TUTORIAL_PEACE_SEC: float = 30.0
+const TUTORIAL_PLACEMENT_SEC: float = 600.0
 
 # --- UI / mobile -------------------------------------------------------------
 const MIN_BUTTON_PX: int = 56
@@ -361,29 +369,14 @@ static var PLAYER_COLORS_COLORBLIND: PackedColorArray = PackedColorArray([
 	Color(0.70, 0.90, 0.60),      # pale green
 ])
 static var colorblind_mode: bool = false
+# Chosen territory colours (cosmetics): player_id -> Color. Set per match by Look.
+static var player_color_overrides: Dictionary = {}
 
 
 func color_for_player(player_id: int) -> Color:
+	if player_color_overrides.has(player_id):
+		return player_color_overrides[player_id]
 	var table: PackedColorArray = PLAYER_COLORS_COLORBLIND if colorblind_mode else PLAYER_COLORS
 	if player_id <= 0 or player_id >= table.size():
 		return Color.BLACK
 	return table[player_id]
-
-
-# --- Bot names ---------------------------------------------------------------
-static var BOT_TITLES: PackedStringArray = PackedStringArray([
-	"Duke", "Duchess", "Lord", "Lady", "Baron", "Baroness",
-	"King", "Queen", "Count", "Countess", "Earl", "Princess",
-])
-static var BOT_NAMES: PackedStringArray = PackedStringArray([
-	"Ashford", "Vex", "Thorne", "Blackwood", "Ravenhill",
-	"Stormhold", "Grimm", "Darkmere", "Fenwick", "Fairfax",
-	"Crow", "Vane", "Wulf", "Ironside", "Shade", "Starling",
-	"Marrow", "Hollow", "Rook", "Hale", "Drake", "Ember",
-])
-
-
-func generate_name(rng: RandomNumberGenerator) -> String:
-	var title: String = BOT_TITLES[rng.randi() % BOT_TITLES.size()]
-	var given: String = BOT_NAMES[rng.randi() % BOT_NAMES.size()]
-	return "%s %s" % [title, given]

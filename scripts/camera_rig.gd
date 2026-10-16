@@ -52,6 +52,11 @@ func screen_to_world(screen_pos: Vector2) -> Vector2:
 	return position + (screen_pos - vp * 0.5) / zoom.x
 
 
+func world_to_screen(world_pos: Vector2) -> Vector2:
+	var vp := get_viewport_rect().size
+	return (world_pos - position) * zoom.x + vp * 0.5
+
+
 # The world rectangle currently on screen (for the minimap's view box).
 func visible_world_rect() -> Rect2:
 	var vp := get_viewport_rect().size

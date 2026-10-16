@@ -12,6 +12,7 @@ const PUBLIC_FIELDS: Array[String] = [
 	"display_name", "land", "is_alive", "is_bot", "personality", "crown_x", "crown_y",
 	"crown_move_to", "crown_move_until", "eliminated_at", "crowns_captured",
 	"crown_alert_until", "crown_shield_until", "oathbreaker_until", "refuses_all_truces",
+	"cosmetic",
 ]
 # Fields only the player themself gets.
 const PRIVATE_FIELDS: Array[String] = [

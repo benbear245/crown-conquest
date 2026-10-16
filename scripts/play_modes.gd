@@ -15,7 +15,12 @@ var _practice: bool = false
 func setup(hud: HUD) -> void:
 	_hud = hud
 	var menu: HudStartMenu = hud.start_menu
-	menu.play_bots.connect(_play_bots)
+	menu.quick_play.connect(func() -> void: _play_local(Profile.last_setup()))
+	menu.play_setup.connect(func(s: MatchSetup) -> void:
+		Profile.remember_setup(s)
+		_play_local(s))
+	menu.play_daily.connect(func() -> void: _play_local(MatchSetup.daily(Progression.today())))
+	menu.play_tutorial.connect(func() -> void: _play_local(MatchSetup.tutorial()))
 	menu.practice_online.connect(func() -> void: _start_host(false))
 	menu.host_lan.connect(func() -> void: _start_host(true))
 	menu.join_lan.connect(_join)
@@ -24,14 +29,20 @@ func setup(hud: HUD) -> void:
 			_session.request_start())
 	menu.leave.connect(func() -> void: _leave(""))
 	hud.new_map_requested.connect(_on_new_map)
+	hud.recap.menu_pressed.connect(func() -> void: _leave(""))
 	menu.show_main("")
 
 
-func _play_bots() -> void:
+# A match on this device. Skirmishes get a fresh map each time; the Daily
+# Challenge and the tutorial always use their fixed seed.
+func _play_local(s: MatchSetup) -> void:
 	_leave_quietly()
-	var s := LocalSession.new()
-	_use(s)
-	s.start(int(Time.get_unix_time_from_system() * 1000.0) ^ randi())
+	var chosen: MatchSetup = s.clamped()
+	if chosen.mode == MatchSetup.MODE_SKIRMISH:
+		chosen.match_seed = int(Time.get_unix_time_from_system() * 1000.0) ^ randi()
+	var session := LocalSession.new()
+	_use(session)
+	session.start(chosen, Profile.look())
 
 
 # Practice runs a real host in this app with no network port; hosting on
@@ -48,7 +59,10 @@ func _start_host(listen: bool) -> void:
 	var link := LoopbackLink.new()
 	_host.attach_loopback(link)
 	_practice = not listen
-	_use(NetSession.new(link, _hud.start_menu.player_name()))
+	var ns := NetSession.new(link, _hud.start_menu.player_name())
+	var wanted: MatchSetup = Profile.last_setup()
+	ns.start_setup = {"size": wanted.size, "map_type": wanted.map_type, "bots": wanted.bots, "difficulty": wanted.difficulty}
+	_use(ns)
 	if listen:
 		_hud.start_menu.show_lobby([_hud.start_menu.player_name()], true, NetHost.lan_addresses())
 
@@ -68,6 +82,8 @@ func _join(address: String) -> void:
 
 
 func _use(s: GameSession) -> void:
+	if s is NetSession:
+		(s as NetSession).look = Profile.look()
 	_session = s
 	s.match_ready.connect(func() -> void: _hud.start_menu.visible = false)
 	s.lobby_changed.connect(_on_lobby)
@@ -84,8 +100,8 @@ func _on_lobby(names: Array, is_host: bool) -> void:
 
 # "New map" / "Play again": a fresh local game, or back to the menu online.
 func _on_new_map() -> void:
-	if _session is LocalSession:
-		_play_bots()
+	if _session is LocalSession and _session.setup != null:
+		_play_local(_session.setup)
 	else:
 		_leave("")
 
@@ -93,6 +109,7 @@ func _on_new_map() -> void:
 func _leave(reason: String) -> void:
 	_leave_quietly()
 	session_changed.emit(null)
+	Look.clear()
 	_hud.set_menu_open(false)
 	_hud.start_menu.show_main(reason)
 

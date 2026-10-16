@@ -35,6 +35,22 @@ static func button(text: String, min_w: int = 120, h: int = BUTTON_H, size: int 
 	return b
 
 
+# A toggle button whose chosen state is easy to see: gold text and border.
+static func toggle(text: String, min_w: int = 120, h: int = BUTTON_H, size: int = 18) -> Button:
+	var b := button(text, min_w, h, size)
+	b.toggle_mode = true
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.22, 0.19, 0.08)
+	sb.border_color = COLOR_WARN
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(6)
+	b.add_theme_stylebox_override("pressed", sb)
+	b.add_theme_stylebox_override("hover_pressed", sb)
+	b.add_theme_color_override("font_pressed_color", COLOR_WARN)
+	b.add_theme_color_override("font_hover_pressed_color", COLOR_WARN)
+	return b
+
+
 static func panel(pad: int = 12) -> PanelContainer:
 	var p := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
