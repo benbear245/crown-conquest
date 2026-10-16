@@ -21,7 +21,15 @@ static func can_attack(sim: Simulation, attacker: Player, defender_id: int) -> b
 	return sim.active_attack_count(attacker.id) < Balance.MAX_SIMULTANEOUS_ATTACKS
 
 
-static func open_attack(sim: Simulation, attacker: Player, defender_id: int, troops: float, front: Dictionary) -> void:
+# The attacker's running attack on this defender, or null.
+static func attack_on(state: GameState, attacker_id: int, defender_id: int) -> Attack:
+	for a: Attack in state.attacks:
+		if a.attacker_id == attacker_id and a.defender_id == defender_id and a.troops_remaining > 0.0:
+			return a
+	return null
+
+
+static func open_attack(sim: Simulation, attacker: Player, defender_id: int, troops: float, front: Dictionary, aim_idx: int = -1) -> void:
 	var state: GameState = sim.state
 	# Attacking a truce partner breaks the truce and makes you an Oathbreaker.
 	if TrucesOps.has_truce(attacker, defender_id, state.match_time):
@@ -31,6 +39,7 @@ static func open_attack(sim: Simulation, attacker: Player, defender_id: int, tro
 	atk.defender_id = defender_id
 	atk.troops_remaining = troops
 	atk.front = front
+	atk.aim_idx = aim_idx
 	atk.advance_timer = Balance.ATTACK_RING_INTERVAL_SEC
 	state.attacks.append(atk)
 	if attacker.is_bot:
@@ -92,7 +101,7 @@ static func _advance_attack(sim: Simulation, a: Attack) -> void:
 	var new_front: Dictionary = {}
 	var stalled_cost: float = 0.0
 	var captured: int = 0
-	for ni: int in a.front.keys():
+	for ni: int in TerritoryOps.nearest_first(state, a.front.keys(), a.aim_idx):
 		if state.owners[ni] != a.defender_id:
 			continue
 		if state.is_blocked_terrain(state.terrain[ni]):

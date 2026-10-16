@@ -52,14 +52,15 @@ The last part of the growth formula is "interest": it's biggest at half the cap 
 
 ### Grabbing free land (expanding)
 
-- Pick a percentage on the send slider (10–100%) and tap free land touching your border. Those troops leave your pool.
-- Each free tile costs **2 troops × the terrain's claim cost**. Ruins cost half (1 × claim cost).
-- Your border spreads one ring every 0.3 seconds until the sent troops run out. Any troops left over return to your pool.
+- Pick a percentage on the send slider (10–100%) and tap any free land. Those troops leave your pool.
+- **Your land grows toward where you tapped.** Every 0.3 seconds it claims the half of the free tiles along your border that are nearest the tapped spot, until the sent troops run out. Any troops left over return to your pool. Tap somewhere else to change direction.
+- Each free tile costs **2 troops × the terrain's claim cost**. Ruins cost half (1 × claim cost). Aiming only changes where the land goes, not how much the troops buy.
 
 ### Attacking
 
-- Tap enemy land to send troops at that player. You can run up to 3 attacks at once.
-- The attack eats one ring of their border tiles every 0.4 seconds, starting from where your lands touch.
+- Tap enemy land to send troops at that player. You must share a border with them (or land by boat). You can attack up to 3 players at once.
+- **Tapping a player you're already attacking reinforces that attack** with more troops instead of starting a new one, so it never uses up an attack slot.
+- The attack eats one ring of their border tiles every 0.4 seconds, starting from where your lands touch. When the troops can't pay for the whole ring, the tiles nearest the spot you tapped go first, so the attack pushes that way (for example toward their Crown).
 - No attacks are allowed during the first 60 seconds of a match.
 - Tap an active attack's icon to retreat. 75% of what's left comes back.
 
@@ -311,6 +312,10 @@ Winning gives +250 XP and the Graduate achievement (once). Skipping marks the tu
 If you ever earn money from the game, sell only cosmetics and "remove ads". Never sell troops, powers or upgrades, because pay-to-win ruins balance.
 
 ## Mobile controls and game feel
+
+**Forgiving taps.** A tap that lands on your own land or on water snaps to the nearest enemy or free tile within about 44 screen pixels (at most 6 tiles), so you don't have to hit a thin border exactly. Every tap shows a quick ring where it landed: green for growing, red for attacking, grey when refused. A refused tap says why (peace, not enough troops, no shared border, all 3 attacks in use) instead of doing nothing.
+
+**Targeting modes** (Wall, Bombard, boat, Crown move) show a bar with what to tap and a **Done** button. In Wall mode, tapping or dragging your own land builds walls; tapping enemy or free land leaves Wall mode and attacks or grows as normal; a drag that starts anywhere else moves the map.
 
 Everything works with one thumb: tap to act, long-press for menus, and a slider for how many troops to send. Feedback (flashes, sounds, vibration) makes every capture feel satisfying.
 

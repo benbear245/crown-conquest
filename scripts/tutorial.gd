@@ -7,12 +7,12 @@ extends RefCounted
 
 const STEPS: Array[Dictionary] = [
 	{"id": "place", "text": "Welcome! Tap a green plains tile to place your Crown. Pick a spot with room to grow."},
-	{"id": "expand", "text": "Tap free land next to your border to grow. Each tap sends troops from your pool. Double your land!"},
+	{"id": "expand", "text": "Tap free land to grow. Your land spreads toward where you tap, and each tap sends troops from your pool. Double your land!"},
 	{"id": "sweet_spot", "next": true,
 		"text": "Troops grow fastest while the troop bar at the top is green — about half full. Spending keeps you in that sweet spot."},
 	{"id": "fort", "text": "Long-press your own land and build a Fort. Forts make the land around them much harder to take. A Fort costs troops, so let your pool fill up first."},
 	{"id": "peace", "text": "Nobody can attack during the peace. It ends at %s — keep growing until then."},
-	{"id": "attack", "text": "Peace is over! Tap the bot's land to attack it."},
+	{"id": "attack", "text": "Peace is over! Tap the bot's land to attack it. Tap again to send more troops into the same attack."},
 	{"id": "shield", "text": "Tap Crown Shield. It protects your Crown for a while when enemies get close."},
 	{"id": "crown", "text": "Now take their Crown: keep attacking until you capture the gold tile at its centre."},
 ]

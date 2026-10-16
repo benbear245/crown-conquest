@@ -389,3 +389,24 @@ See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (g
 - Consistent buttons: one gold button for the main action on each screen, outlined buttons for everything else.
 - Android back button closes the top pop-up or screen before leaving the app; in the lobby it leaves the lobby.
 - Checked at 16:9, 20:9 and 4:3 screen shapes; soak test (Quick play, online practice, tutorial) passes; 0 script warnings.
+
+## v0.2.2: Smoother growing and attacking
+
+**Bug fixed: "after building walls I can't attack."** Wall mode stayed on after building, so every later tap tried to build a wall on enemy land (and failed silently), and dragging built walls instead of moving the map. Now:
+- Tapping enemy or free land in Wall mode leaves it and attacks or grows straight away.
+- A drag only paints walls if it starts on your own land; otherwise it moves the map.
+- Every targeting mode shows a bar with a **Done** button.
+
+**Easier on a phone**
+- Taps snap: tapping your own land or water near the border picks the nearest enemy or free tile within finger reach (`TapTargets`, `Balance.TAP_SNAP_PX`).
+- Each tap shows a ring (green grow, red attack, grey refused), and refused taps say why: peace, not enough troops, no shared border, or all attack slots in use. Repeated messages don't stack.
+
+**Better growing and attacking (rules)**
+- Growth heads toward where you tap: each ring claims the half of your free frontier nearest the tapped spot (`Balance.EXPAND_AIM_RING_SHARE`). Any free tile can be tapped, not only ones touching your border.
+- Attacks push toward the tapped spot when troops can't cover the whole front.
+- Tapping a player you're already attacking reinforces that attack instead of needing a new slot.
+- Bots use the same rules. Balance check (20 simulated matches): average 7:48 per match, 1 of 20 went to the 15:00 limit (before: about 1 in 4).
+
+**Tested:** a scripted player drove the real tap handler: a wall built in Wall mode, then a tap on the enemy left Wall mode and attacked; a second tap reinforced it (2,498 → 3,747 troops); a tap on own land beside the enemy snapped to an attack; drags from enemy land panned and drags from own land painted walls; aimed growth put 121 of 123 new tiles on the tapped side. Soak test and online tests pass; 0 script warnings.
+
+`game.gd` was getting long, so the recap and tutorial upkeep moved to `scripts/match_progress.gd`.

@@ -32,6 +32,7 @@ var eliminated_at: float = -1.0
 # Expansion bucket: troops committed to grabbing free land. Refunded when done.
 var expansion_troops: float = 0.0
 var expansion_timer: float = 0.0        # seconds until the next ring tick
+var expand_aim: int = -1                # tile the player last tapped to grow toward (-1 = none)
 
 # Bot think cadence and memory (ignored for humans).
 var think_timer: float = 0.0

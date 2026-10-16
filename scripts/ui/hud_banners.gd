@@ -32,6 +32,14 @@ func push_text(text: String, color: Color = UI.COLOR_TEXT, seconds: float = DEFA
 	_queue.append({"kind": "text", "text": text, "color": color, "sec": seconds})
 
 
+# Like push_text, but skipped while the same text is already showing or
+# queued, so tapping again and again doesn't stack copies.
+func push_once(text: String, color: Color = UI.COLOR_TEXT, seconds: float = DEFAULT_SEC) -> void:
+	if _has_key("msg:" + text):
+		return
+	_queue.append({"kind": "text", "text": text, "color": color, "sec": seconds, "key": "msg:" + text})
+
+
 func push_crown_alert() -> void:
 	if _has_key("crown_alert"):
 		return

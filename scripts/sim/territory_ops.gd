@@ -164,7 +164,10 @@ static func _expand_one_ring(sim: Simulation, player: Player) -> void:
 		return
 	var discount: float = claim_discount(sim, player)
 	var min_cost := INF
-	for ni: int in frontier:
+	var ordered: PackedInt32Array = nearest_first(state, frontier, player.expand_aim)
+	if player.expand_aim >= 0:
+		ordered.resize(maxi(1, ceili(ordered.size() * Balance.EXPAND_AIM_RING_SHARE)))
+	for ni: int in ordered:
 		var cost := claim_cost_idx(state, ni) * discount
 		if cost < min_cost:
 			min_cost = cost
@@ -197,6 +200,39 @@ static func collect_frontier(state: GameState, player: Player) -> PackedInt32Arr
 				continue
 			seen[ni] = true
 			out.append(ni)
+	return out
+
+
+# True if the player has at least one free tile next to their border.
+static func has_frontier(state: GameState, player: Player) -> bool:
+	for i: int in player.border.keys():
+		var pos := state.idx_to_xy(i)
+		for off in NEIGHBOR_OFFSETS:
+			var nx: int = pos.x + off.x
+			var ny: int = pos.y + off.y
+			if not state.in_bounds(nx, ny):
+				continue
+			var ni := state.idx(nx, ny)
+			if not state.is_player_owner(state.owners[ni]) and not state.is_blocked_terrain(state.terrain[ni]):
+				return true
+	return false
+
+
+# Tiles ordered nearest-first to aim_idx (unchanged when there's no aim).
+# When troops can't pay for every tile, the nearest ones are taken first.
+# Packs (distance², tile) into one int so the sort runs natively.
+static func nearest_first(state: GameState, tiles: Variant, aim_idx: int) -> PackedInt32Array:
+	var out := PackedInt32Array(tiles)
+	if aim_idx < 0 or out.size() < 2:
+		return out
+	var aim: Vector2i = state.idx_to_xy(aim_idx)
+	for k in range(out.size()):
+		var p: Vector2i = state.idx_to_xy(out[k])
+		var d2: int = mini((p.x - aim.x) * (p.x - aim.x) + (p.y - aim.y) * (p.y - aim.y), 32767)
+		out[k] = (d2 << 16) | out[k]
+	out.sort()
+	for k in range(out.size()):
+		out[k] = out[k] & 0xFFFF
 	return out
 
 

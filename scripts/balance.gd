@@ -51,6 +51,9 @@ const TROOP_BAR_SWEET_HIGH: float = 0.65
 const CLAIM_COST_BASE: float = 2.0            # troops per tile x terrain claim cost
 const RUINS_CLAIM_MULT: float = 0.5
 const EXPANSION_RING_INTERVAL_SEC: float = 0.3
+# Aimed growth: each ring only claims this share of the free tiles along the
+# border, the ones nearest the tapped spot, so land grows toward the tap.
+const EXPAND_AIM_RING_SHARE: float = 0.5
 const SEND_MIN_FRACTION: float = 0.10
 const SEND_MAX_FRACTION: float = 1.00
 
@@ -332,6 +335,10 @@ const TUTORIAL_PLACEMENT_SEC: float = 600.0
 
 # --- UI / mobile -------------------------------------------------------------
 const MIN_BUTTON_PX: int = 56
+# A tap that lands on your own land or water snaps to the nearest enemy or
+# free tile within this many screen pixels (capped in tiles when zoomed out).
+const TAP_SNAP_PX: float = 44.0
+const TAP_SNAP_MAX_TILES: int = 6
 
 # --- Player colours (first N used) -------------------------------------------
 # Index 0 is reserved (unowned); player ids start at 1.

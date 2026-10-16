@@ -30,6 +30,7 @@ var start_menu: HudStartMenu
 
 var _sim: Simulation
 var _mode_label: Label
+var _mode_box: PanelContainer
 var _placement_label: Label
 
 
@@ -43,12 +44,7 @@ func _ready() -> void:
 	hints = _add(HudHints.new())
 	banners = _add(HudBanners.new())
 	tutorial = _add(HudTutorial.new())
-	_mode_label = _add(UI.label("", 20, UI.COLOR_WARN))
-	_mode_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_mode_label.offset_left = -400
-	_mode_label.offset_right = 400
-	_mode_label.offset_top = UI.TOP_BAR_H + 44 + HudBanners.MAX_VISIBLE * 60
-	_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_build_mode_box()
 	_placement_label = _add(UI.label("", 26))
 	UI.centre(_placement_label, 900, 60)
 	_placement_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -129,13 +125,35 @@ func apply_layout() -> void:
 	tutorial.apply_side(lh)
 
 
+# While a targeting mode is on (walls, Bombard, boat, Crown move): what to
+# tap, and a Done button that always gets you back to normal play.
+func _build_mode_box() -> void:
+	_mode_box = _add(UI.panel(10))
+	_mode_box.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_mode_box.offset_left = -430
+	_mode_box.offset_right = 430
+	_mode_box.offset_top = UI.TOP_BAR_H + 44 + HudBanners.MAX_VISIBLE * 60
+	_mode_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var row := UI.hbox(14)
+	_mode_box.add_child(row)
+	_mode_label = UI.label("", 20, UI.COLOR_WARN)
+	_mode_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mode_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_mode_label)
+	var done := UI.primary_button("Done", 140, UI.BUTTON_H, 22)
+	done.pressed.connect(func() -> void: target_mode_requested.emit("", Vector2i.ZERO))
+	row.add_child(done)
+	_mode_box.visible = false
+
+
 func send_fraction() -> float:
 	return bottom_bar.send_fraction
 
 
 func set_mode_text(text: String) -> void:
 	_mode_label.text = text
-	_mode_label.visible = text != ""
+	_mode_box.visible = text != ""
 
 
 func set_menu_open(open: bool) -> void:

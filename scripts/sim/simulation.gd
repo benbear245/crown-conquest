@@ -283,32 +283,44 @@ func player_expand(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 	var ti: int = state.idx(tx, ty)
 	if state.is_player_owner(state.owners[ti]) or state.is_blocked_terrain(state.terrain[ti]):
 		return false
-	if not TerritoryOps.tile_touches_player(state, tx, ty, player_id):
+	# Any free tile works as a target: growth heads toward it along the border.
+	if not TerritoryOps.has_frontier(state, p):
 		return false
 	var send_amount := floorf(p.troops * clampf(fraction, Balance.SEND_MIN_FRACTION, Balance.SEND_MAX_FRACTION))
 	if send_amount <= 0.0:
 		return false
 	p.troops -= send_amount
 	p.expansion_troops += send_amount
+	p.expand_aim = ti
 	if p.expansion_timer <= 0.0:
 		p.expansion_timer = Balance.EXPANSION_RING_INTERVAL_SEC
 	return true
 
 
-# Target tile must be owned by another live player and touch the attacker's border.
+# Target tile must be owned by another live player that shares a border with
+# the attacker. Tapping someone you're already attacking reinforces that attack.
 func player_attack(player_id: int, tx: int, ty: int, fraction: float) -> bool:
 	var p := _actor(player_id)
 	if p == null or not state.in_bounds(tx, ty):
 		return false
-	var target_owner: int = state.owners[state.idx(tx, ty)]
-	if not CombatOps.can_attack(self, p, target_owner):
+	var ti: int = state.idx(tx, ty)
+	var target_owner: int = state.owners[ti]
+	var existing: Attack = CombatOps.attack_on(state, p.id, target_owner)
+	if existing == null and not CombatOps.can_attack(self, p, target_owner):
+		return false
+	if existing != null and state.is_peace():
 		return false
 	var front: Dictionary = CombatOps.build_attack_front(state, p, target_owner)
 	var send: float = floorf(p.troops * clampf(fraction, Balance.SEND_MIN_FRACTION, Balance.SEND_MAX_FRACTION))
 	if front.is_empty() or send <= 0.0:
 		return false
 	p.troops -= send
-	CombatOps.open_attack(self, p, target_owner, send, front)
+	if existing != null:
+		existing.troops_remaining += send
+		existing.front.merge(front)
+		existing.aim_idx = ti
+	else:
+		CombatOps.open_attack(self, p, target_owner, send, front, ti)
 	return true
 
 

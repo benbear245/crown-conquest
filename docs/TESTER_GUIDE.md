@@ -1,28 +1,28 @@
-# Crown Conquest — Tester Guide (test build v0.2.1)
+# Crown Conquest — Tester Guide (test build v0.2.2)
 
 Thanks for testing! Crown Conquest is a real-time territory game: grow your troops, grab land, and capture enemy Crowns while protecting your own. A match takes about 7–12 minutes.
 
 ## Install
 
 **Android phone (Android 7 or newer, 64-bit)**
-1. Open the file `CrownConquest-v0.2.1.apk` on your phone (from the email, chat or download link you got).
+1. Open the file `CrownConquest-v0.2.2.apk` on your phone (from the email, chat or download link you got).
 2. Android will ask to allow installing apps from this source (your browser, Files app, or chat app). Allow it.
 3. If Play Protect warns that the app is unknown, tap **Install anyway** (it's a test build that isn't on the Play Store yet).
 4. Open **Crown Conquest**. It plays sideways (landscape).
 
 **Windows PC**
-1. Extract `CrownConquest-v0.2.1-windows.7z` (Windows 11: right-click → Extract All; Windows 10: use the free 7-Zip app), then double-click `CrownConquest.exe`.
+1. Extract `CrownConquest-v0.2.2-windows.7z` (Windows 11: right-click → Extract All; Windows 10: use the free 7-Zip app), then double-click `CrownConquest.exe`.
 2. If Windows says "Windows protected your PC", click **More info → Run anyway** (the test build isn't signed for Windows).
 3. Use the mouse: click = tap, hold the button = long-press, drag = move the map, scroll wheel = zoom.
 
 ## What to try (about 45 minutes)
 
 1. **Tutorial:** tap **Start tutorial** on the welcome banner (or **Tutorial** at the bottom) and follow the steps (about 5 minutes). Did each step make sense? Did the arrow point at the right thing?
-2. **First real match:** tap **Quick play**. Try to win, or at least survive past 5:00. Afterwards, read the recap: the land graph, best moment, XP and level bar.
+2. **First real match:** tap **Quick play**. Try tapping near, not exactly on, a border: does it pick what you meant? Tap far-off free land and watch your land grow that way. Try to win, or at least survive past 5:00. Afterwards, read the recap: the land graph, best moment, XP and level bar.
 3. **Match setup:** tap **Change map and bots**, change the map size, type, number of bots and difficulty. Back on the home screen, the line under Quick play should now show your choice. Was it clear where everything is on the home screen?
 4. **Daily Challenge:** play it once and check your score appears on the menu. Tell us your score!
 5. **Customize and Progress:** pick a colour, pattern, Crown icon, title and victory effect; check they show in your next match. Look at the trophy shelf and today's challenges.
-6. **Building:** long-press your own land and build a Fort, a Barracks and a Watchtower. Try Wall mode.
+6. **Building:** long-press your own land and build a Fort, a Barracks and a Watchtower. Try Wall mode: draw some walls, then tap an enemy straight away. Does attacking work without pressing Done?
 7. **Spying:** long-press a rival's land. Scout them, then Spy (unlocks at 2:00). Offer a truce.
 8. **Your Crown:** tap **♛ Crown**: buy a Keep upgrade, try Disinformation, and after 3:00 move your Crown.
 9. **Shrines:** find a glowing diamond (◆) on the map and capture it.

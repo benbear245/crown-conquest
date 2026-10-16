@@ -12,6 +12,10 @@ var troops_remaining: float = 0.0
 # consume these next ring tick; new neighbours get added as we capture.
 var front: Dictionary = {}
 
+# Tile the attacker tapped. When troops can't pay for the whole front, the
+# tiles nearest this point are taken first, so the attack pushes that way.
+var aim_idx: int = -1
+
 # Seconds remaining until the next ring advance.
 var advance_timer: float = 0.0
 # Total cost of the front tiles the last ring couldn't afford (0 = none

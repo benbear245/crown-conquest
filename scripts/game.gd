@@ -22,6 +22,7 @@ var _slow_mo_left: float = 0.0
 var _mode: String = ""
 var _boat_port: Vector2i = Vector2i(-1, -1)
 var _last_wall_tile: Vector2i = Vector2i(-1, -1)
+var _painting_walls: bool = false      # this drag started on your land in wall mode
 var _colorblind_shown: bool = false
 var _recorder: MatchRecorder
 var _tutorial: Tutorial
@@ -30,6 +31,7 @@ var _tutorial: Tutorial
 func _ready() -> void:
 	_input.tapped.connect(_on_tap)
 	_input.long_pressed.connect(_on_long_press)
+	_input.drag_started.connect(_on_drag_started)
 	_input.dragged.connect(_on_drag)
 	_input.pinched.connect(func(f: float, c: Vector2) -> void: _camera.zoom_by(f, c))
 	_input.wheel_zoomed.connect(func(f: float, p: Vector2) -> void: _camera.zoom_by(f, p))
@@ -103,49 +105,13 @@ func _process(delta: float) -> void:
 # Feeds the recorder and, once the match is over for you, saves your
 # progress and fills in the recap.
 func _record() -> void:
-	if _recorder == null:
-		return
-	var cur: Simulation = _session.sim()
-	_recorder.observe(cur)
-	if not _recorder.should_finish(cur):
-		return
-	_recorder.finished = true
-	var summary: Dictionary = _recorder.summary(cur)
-	var result: Dictionary
-	if _recorder.mode == MatchSetup.MODE_TUTORIAL:
-		var finished: bool = bool(summary["won"]) and _tutorial != null and not _tutorial.skipped
-		result = Profile.complete_tutorial() if finished else {}
-	else:
-		result = Profile.record_match(summary)
-	_recorder.result = result
-	match _recorder.mode:
-		MatchSetup.MODE_TUTORIAL:
-			_hud.recap.set_play_again_text("Replay tutorial")
-		MatchSetup.MODE_DAILY:
-			_hud.recap.set_play_again_text("Retry daily")
-		MatchSetup.MODE_ONLINE:
-			_hud.recap.set_play_again_text("Back to menu")
-		_:
-			_hud.recap.set_play_again_text("Play again")
-	_hud.recap.show_result(_recorder, cur, result)
+	if _recorder != null:
+		MatchProgress.record(_hud, _recorder, _tutorial, _session.sim())
 
 
 func _update_tutorial() -> void:
-	if _tutorial == null:
-		return
-	var cur: Simulation = _session.sim()
-	_tutorial.update(cur)
-	if _tutorial.is_done() or cur.state.phase == Balance.PHASE_ENDED:
-		_hud.tutorial.visible = false
-		return
-	var arrow := Vector2(-1, -1)
-	var world: Vector2 = _tutorial.target_world(cur)
-	if world.x >= 0.0:
-		arrow = _camera.world_to_screen(world)
-	elif _tutorial.target_ability() >= 0:
-		var r: Rect2 = _hud.bottom_bar.ability_rect(_tutorial.target_ability())
-		arrow = Vector2(r.get_center().x, r.position.y)
-	_hud.tutorial.show_step(_tutorial.step, Tutorial.STEPS.size(), _tutorial.text(cur), _tutorial.needs_next_button(), arrow)
+	if _tutorial != null:
+		MatchProgress.show_tutorial(_hud, _camera, _tutorial, _session.sim())
 
 
 # Slow motion uses Engine.time_scale, so it is timed in real seconds.
@@ -213,27 +179,43 @@ func _on_tap(screen_pos: Vector2) -> void:
 	if tile.x < 0:
 		_set_mode("", Vector2i.ZERO)
 		return
-	if _mode != "":
-		_tap_in_mode(tile)
-		return
 	var local: Player = state.get_player(cur.local_player_id)
-	if local != null and local.crown_x >= 0 and absi(tile.x - local.crown_x) <= 1 and absi(tile.y - local.crown_y) <= 1:
+	if _mode != "":
+		# In wall mode, tapping anything but your own land ends wall mode and
+		# counts as a normal tap, so you can attack straight away.
+		if _mode != "wall" or (local != null and state.owners[state.idx(tile.x, tile.y)] == local.id):
+			_tap_in_mode(tile)
+			return
+		_set_mode("", Vector2i.ZERO)
+	if local == null or not local.is_alive:
+		return
+	if local.crown_x >= 0 and absi(tile.x - local.crown_x) <= 1 and absi(tile.y - local.crown_y) <= 1:
 		_hud.keep_panel.visible = true
 		return
-	var owner_id: int = state.owners[state.idx(tile.x, tile.y)]
+	var radius: int = clampi(ceili(Balance.TAP_SNAP_PX / _camera.zoom.x), 1, Balance.TAP_SNAP_MAX_TILES)
+	_act_on(cur, local, TapTargets.resolve(state, local, tile, radius))
+
+
+# Grow toward, or attack, the tile a tap resolved to; explain any refusal.
+func _act_on(cur: Simulation, local: Player, target: Dictionary) -> void:
+	var t: Vector2i = target["tile"]
+	var world := Vector2(t.x + 0.5, t.y + 0.5)
 	var frac: float = _hud.send_fraction()
-	if not state.is_player_owner(owner_id):
-		_send("expand", [tile.x, tile.y, frac], func(ok: bool) -> void:
-			if ok:
-				_audio.play("expand")
-				_hud.hints.done("expand"))
-	elif owner_id != local.id:
-		_send("attack", [tile.x, tile.y, frac], func(ok: bool) -> void:
-			if ok:
-				_audio.play("attack")
-				_hud.hints.done("attack")
-			elif state.is_peace():
-				_hud.banners.push_text("Peace — no attacks until %s" % GameState.format_time(state.peace_sec), UI.COLOR_WARN, 2.0))
+	var action: String = target["action"]
+	if action == TapTargets.NONE:
+		_hud.banners.push_once("Tap free land to grow, or enemy land to attack", UI.COLOR_DIM, 2.0)
+		return
+	var why: String = TapTargets.expand_blocker(cur, local, frac) if action == TapTargets.EXPAND \
+		else TapTargets.attack_blocker(cur, local, int(target["owner"]), frac)
+	if why != "":
+		_overlay.add_ping(world, Color(0.75, 0.75, 0.75))
+		_hud.banners.push_once(why, UI.COLOR_WARN, 2.5)
+		return
+	_overlay.add_ping(world, UI.COLOR_GOOD if action == TapTargets.EXPAND else UI.COLOR_BAD)
+	_send(action, [t.x, t.y, frac], func(ok: bool) -> void:
+		if ok:
+			_audio.play(action)
+			_hud.hints.done(action))
 
 
 func _tap_in_mode(tile: Vector2i) -> void:
@@ -241,7 +223,7 @@ func _tap_in_mode(tile: Vector2i) -> void:
 	match _mode:
 		"wall":
 			_send("build_wall", [tile.x, tile.y])
-			return            # wall mode stays on until tapped off the map or toggled
+			return            # wall mode stays on until Done, or a tap off your land
 		"bombard":
 			_send("ability", [AbilitiesOps.ID_BOMBARD, tile.x, tile.y], func(ok: bool) -> void:
 				if not ok:
@@ -282,8 +264,19 @@ func _on_long_press(screen_pos: Vector2) -> void:
 		_hud.hints.done("spy")
 
 
+# In wall mode a drag that starts on your own land paints walls; any other
+# drag moves the map as usual.
+func _on_drag_started(press_pos: Vector2) -> void:
+	_painting_walls = false
+	if _mode != "wall" or _session == null or _session.sim() == null:
+		return
+	var cur: Simulation = _session.sim()
+	var tile: Vector2i = _screen_to_tile(press_pos)
+	_painting_walls = tile.x >= 0 and cur.state.owners[cur.state.idx(tile.x, tile.y)] == cur.local_player_id
+
+
 func _on_drag(screen_pos: Vector2, relative: Vector2) -> void:
-	if _mode == "wall":
+	if _mode == "wall" and _painting_walls:
 		var tile: Vector2i = _screen_to_tile(screen_pos)
 		if tile.x >= 0 and tile != _last_wall_tile:
 			_last_wall_tile = tile
@@ -309,7 +302,7 @@ func _set_mode(mode: String, data: Vector2i) -> void:
 	_last_wall_tile = Vector2i(-1, -1)
 	match mode:
 		"wall":
-			_hud.set_mode_text("Wall mode — tap or drag your land (tap outside the map to stop)")
+			_hud.set_mode_text("Wall mode — tap or drag your land. Tap enemy or free land to go back to fighting.")
 		"bombard":
 			_hud.set_mode_text("Bombard — tap a target within %d tiles of your border" % Balance.BOMBARD_RANGE_TILES)
 		"boat":

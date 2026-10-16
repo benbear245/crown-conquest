@@ -8,6 +8,7 @@ extends Node
 
 signal tapped(screen_pos: Vector2)
 signal long_pressed(screen_pos: Vector2)
+signal drag_started(press_pos: Vector2)
 signal dragged(screen_pos: Vector2, relative: Vector2)
 signal pinched(factor: float, centre: Vector2)
 signal wheel_zoomed(factor: float, screen_pos: Vector2)
@@ -76,6 +77,7 @@ func _on_pointer_move(pos: Vector2, relative: Vector2) -> void:
 		_dragging = true
 		# Don't lose the movement that crossed the threshold.
 		relative = pos - _press_pos
+		drag_started.emit(_press_pos)
 	if _dragging:
 		dragged.emit(pos, relative)
 

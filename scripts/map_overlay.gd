@@ -8,10 +8,12 @@ extends Node2D
 const FRONT_RECT_LIMIT: int = 3000
 const FLOAT_TEXT_SEC: float = 1.6
 const FLOAT_RISE_TILES: float = 6.0
+const PING_SEC: float = 0.5
 
 var _state: GameState
 var _local_id: int = 1
 var _floaters: Array[Dictionary] = []
+var _pings: Array[Dictionary] = []         # tap feedback rings: {pos, color, age}
 var _time: float = 0.0
 var _font: Font
 
@@ -20,6 +22,7 @@ func setup(state: GameState, local_id: int) -> void:
 	_state = state
 	_local_id = local_id
 	_floaters.clear()
+	_pings.clear()
 	_font = ThemeDB.fallback_font
 
 
@@ -27,8 +30,16 @@ func add_floater(world_pos: Vector2, text: String, color: Color, scale_mult: flo
 	_floaters.append({"pos": world_pos, "text": text, "color": color, "age": 0.0, "scale": scale_mult})
 
 
+# A quick ring where a tap landed: green grow, red attack, grey refused.
+func add_ping(world_pos: Vector2, color: Color) -> void:
+	_pings.append({"pos": world_pos, "color": color, "age": 0.0})
+
+
 func _process(delta: float) -> void:
 	_time += delta
+	for pg in _pings:
+		pg["age"] = float(pg["age"]) + delta
+	_pings = _pings.filter(func(pg: Dictionary) -> bool: return float(pg["age"]) < PING_SEC)
 	for f in _floaters:
 		f["age"] = float(f["age"]) + delta
 	_floaters = _floaters.filter(func(f: Dictionary) -> bool: return float(f["age"]) < FLOAT_TEXT_SEC)
@@ -43,6 +54,7 @@ func _draw() -> void:
 	_draw_crowns()
 	_draw_boats()
 	_draw_floaters()
+	_draw_pings()
 
 
 # Fronts pulse in the attacker's colour; the local player's own fights pulse harder.
@@ -110,6 +122,15 @@ func _draw_boats() -> void:
 		var pos: Vector2i = _state.idx_to_xy(ti)
 		draw_rect(Rect2(Vector2(pos) - Vector2(0.3, 0.3), Vector2(1.6, 1.6)), Color.WHITE)
 		draw_rect(Rect2(Vector2(pos), Vector2.ONE), Balance.color_for_player(b.owner_id))
+
+
+func _draw_pings() -> void:
+	for pg in _pings:
+		var t: float = float(pg["age"]) / PING_SEC
+		var col: Color = pg["color"]
+		col.a = 1.0 - t
+		draw_arc(pg["pos"], 0.8 + 3.2 * t, 0.0, TAU, 24, col, 0.5)
+		draw_circle(pg["pos"], 0.45, col)
 
 
 func _draw_floaters() -> void:

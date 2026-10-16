@@ -7,9 +7,9 @@ extends PanelContainer
 const SHOW_SEC: float = 9.0
 const HINTS: Dictionary = {
 	"place": "Tap a plains, forest or hill tile to place your Crown.",
-	"expand": "Tap free land next to your border to expand. The slider sets how many troops you send.",
+	"expand": "Tap free land to grow — your land spreads toward where you tap. The slider sets how many troops you send.",
 	"sweet_spot": "Troops grow fastest while the bar is green (35–65% full). Keep spending!",
-	"attack": "Peace is over. Tap enemy land next to your border to attack.",
+	"attack": "Peace is over. Tap enemy land to attack — the attack pushes toward where you tap. Tap again to send more troops.",
 	"build": "Long-press your own land to build Forts, Barracks, Watchtowers and Walls.",
 	"spy": "Long-press enemy land to see a rival, offer a truce, or spy on them.",
 	"shrine": "Shrines (◆ on the map) bless whoever holds their centre tile. Fight for them!",
