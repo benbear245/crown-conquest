@@ -51,6 +51,59 @@ static func toggle(text: String, min_w: int = 120, h: int = BUTTON_H, size: int 
 	return b
 
 
+# The one main action on a screen: gold with dark text.
+static func primary_button(text: String, min_w: int = 120, h: int = BUTTON_H, size: int = 22) -> Button:
+	var b := button(text, min_w, h, size)
+	var gold := Color(1.0, 0.78, 0.22)
+	b.add_theme_stylebox_override("normal", _flat(gold, 10))
+	b.add_theme_stylebox_override("hover", _flat(gold.lightened(0.15), 10))
+	b.add_theme_stylebox_override("pressed", _flat(gold.darkened(0.2), 10))
+	b.add_theme_stylebox_override("disabled", _flat(Color(0.3, 0.3, 0.3), 10))
+	var ink := Color(0.12, 0.08, 0.02)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(c, ink)
+	return b
+
+
+# A clearly tappable secondary button: outlined in the accent colour.
+static func outline_button(text: String, accent: Color, min_w: int = 120, h: int = BUTTON_H, size: int = 20) -> Button:
+	var b := button(text, min_w, h, size)
+	var normal := _flat(Color(0.15, 0.16, 0.21), 10)
+	normal.border_color = Color(accent, 0.7)
+	normal.set_border_width_all(2)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.20, 0.21, 0.27)
+	hover.border_color = accent
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(accent, 0.25)
+	pressed.border_color = accent
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", pressed)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(c, accent.lerp(Color.WHITE, 0.35))
+	return b
+
+
+# A rounded box for a group of related actions, with a coloured top edge.
+static func card(accent: Color, pad: int = 20) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := _flat(Color(0.09, 0.10, 0.14, 0.97), 14)
+	sb.border_color = accent
+	sb.border_width_top = 5
+	sb.set_content_margin_all(pad)
+	p.add_theme_stylebox_override("panel", sb)
+	return p
+
+
+static func _flat(bg: Color, radius: int) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(radius)
+	sb.set_content_margin_all(8)
+	return sb
+
+
 static func panel(pad: int = 12) -> PanelContainer:
 	var p := PanelContainer.new()
 	var sb := StyleBoxFlat.new()

@@ -162,7 +162,8 @@ func _notification(what: int) -> void:
 	# start screen) leave the app.
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST and _hud != null:
 		if _hud.start_menu.visible:
-			get_tree().quit()
+			if not _hud.start_menu.close_top():
+				get_tree().quit()
 		elif _hud.any_panel_open():
 			_hud.close_panels()
 			_hud.set_menu_open(false)

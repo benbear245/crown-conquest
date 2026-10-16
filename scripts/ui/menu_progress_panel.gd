@@ -29,7 +29,7 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(spacer)
-	var back_btn := UI.button("Back", 180)
+	var back_btn := UI.outline_button("Back", UI.COLOR_DIM, 180)
 	back_btn.pressed.connect(func() -> void: back.emit())
 	head.add_child(back_btn)
 	var body := UI.hbox(28)
@@ -81,15 +81,17 @@ func open() -> void:
 
 
 # Lists today's challenges with progress into box (also used by the start menu).
-static func fill_challenges(box: VBoxContainer, font_size: int) -> void:
+static func fill_challenges(box: VBoxContainer, font_size: int, footer: bool = true) -> void:
 	UI.clear_children(box)
 	for c: Dictionary in Profile.daily_challenges():
 		var done: bool = bool(c["done"])
 		var prog: String = "done" if done else "%d / %d" % [int(c["progress"]), int(c["target"])]
 		var l := UI.label("%s %s  (%s)" % ["✔" if done else "•", String(c["text"]), prog], font_size,
 			UI.COLOR_GOOD if done else UI.COLOR_TEXT)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(l)
-	box.add_child(UI.label("+%d XP each. New ones every day." % Balance.XP_PER_DAILY_CHALLENGE, font_size - 2, UI.COLOR_DIM))
+	if footer:
+		box.add_child(UI.label("+%d XP each. New ones every day." % Balance.XP_PER_DAILY_CHALLENGE, font_size - 2, UI.COLOR_DIM))
 
 
 static func _trophy(title: String, desc: String, earned: bool) -> PanelContainer:

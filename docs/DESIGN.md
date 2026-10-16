@@ -581,7 +581,7 @@ Make sure none of this slows the game down. Run it, fix errors, then commit as "
 
 ```text
 Following docs/DESIGN.md "Modes" and "Maps", add:
-- Main menu: Quick play, Play vs bots (match setup), Daily Challenge, Tutorial, Customize, Progress, Online. (Teams is not built yet.)
+- Home screen: a header (title, your name, level bar, Settings), a welcome banner with "Start tutorial" for new players, three cards (Play vs bots: a big gold Quick play button with the current setup, your record and "Change map and bots"; Daily Challenge: today's map, your best score, the play button and today's challenges; Play with friends: Host a game, Join a game with the address box, how-it-works steps and "Try online mode on this phone"), and a row for Tutorial, How to play, Customize and Progress & trophies. How to play, Settings and the lobby open as pop-ups; the Android back button closes the top one. One gold button per screen marks the main action. (Teams is not built yet.)
 - Skirmish setup: map size, map type, number of bots, difficulty (Easy/Normal/Hard/Mixed), optional seed.
 - Teams mode: 4 teams of 2 with a bot ally. Allies can't attack each other, there's a "Send 20% to ally" button, and the team wins together.
 - Daily Challenge: seed from today's date, fixed settings, the score from the design, best score saved.

@@ -379,3 +379,13 @@ See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (g
 - Seven full matches through the real screens (Quick play, Daily, tutorial, Small vs Hard, Large Archipelago with 11 bots, two practice online): every one ended with the recap shown and progress saved.
 - A scripted player finished all 8 tutorial steps and won (2:16, +350 XP).
 - Balance simulator (6 matches) and the online data test still run as before. No script errors or warnings (LSP check: 0 diagnostics).
+
+## v0.2.1: Friendlier home screen
+
+- The home screen fills the whole display with three cards: **Play vs bots** (a big gold Quick play button, the current setup, your record or a tip, "Change map and bots"), **Daily Challenge** (today's map, your best score, today's challenges) and **Play with friends** (Host, Join, and three steps explaining how it works).
+- New players see a welcome banner with "Start tutorial" / "Not now", and the Tutorial button is marked NEW. Red text is now only used for real errors.
+- Pop-ups instead of crowded inline sections: How to play (rules in six short rows, plus a tutorial shortcut), Settings (sound, music, vibration, colour-blind, left-handed, tips, report a problem — reachable before a match now) and the lobby (the host's address shown large so it's easy to read out).
+- The join address box only appears after tapping "Join a game"; pressing Enter joins.
+- Consistent buttons: one gold button for the main action on each screen, outlined buttons for everything else.
+- Android back button closes the top pop-up or screen before leaving the app; in the lobby it leaves the lobby.
+- Checked at 16:9, 20:9 and 4:3 screen shapes; soak test (Quick play, online practice, tutorial) passes; 0 script warnings.

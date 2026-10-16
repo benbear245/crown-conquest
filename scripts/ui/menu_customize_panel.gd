@@ -31,7 +31,7 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(spacer)
-	var back_btn := UI.button("Back", 180)
+	var back_btn := UI.outline_button("Back", UI.COLOR_DIM, 180)
 	back_btn.pressed.connect(func() -> void: back.emit())
 	head.add_child(back_btn)
 	var tabs := UI.hbox(8)

@@ -31,7 +31,7 @@ func _ready() -> void:
 	var bl := UI.label("How many", 20, UI.COLOR_DIM)
 	bl.custom_minimum_size = Vector2(150, 0)
 	bots_row.add_child(bl)
-	var minus := UI.button("−", 72)
+	var minus := UI.outline_button("−", UI.COLOR_TEXT, 72, UI.BUTTON_H, 26)
 	minus.pressed.connect(func() -> void: _change_bots(-1))
 	bots_row.add_child(minus)
 	_bots_label = UI.label("", 24)
@@ -39,16 +39,16 @@ func _ready() -> void:
 	_bots_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bots_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bots_row.add_child(_bots_label)
-	var plus := UI.button("+", 72)
+	var plus := UI.outline_button("+", UI.COLOR_TEXT, 72, UI.BUTTON_H, 26)
 	plus.pressed.connect(func() -> void: _change_bots(1))
 	bots_row.add_child(plus)
 	var row := UI.hbox(16)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(row)
-	var back_btn := UI.button("Back", 200, UI.BUTTON_H, 20)
+	var back_btn := UI.outline_button("Back", UI.COLOR_DIM, 200, UI.BUTTON_H, 20)
 	back_btn.pressed.connect(func() -> void: back.emit())
 	row.add_child(back_btn)
-	var go := UI.button("Start match", 320, UI.BUTTON_H + 8, 24)
+	var go := UI.primary_button("Start match", 320, UI.BUTTON_H + 8, 24)
 	go.pressed.connect(func() -> void:
 		var s: MatchSetup = _setup.clamped()
 		s.mode = MatchSetup.MODE_SKIRMISH
