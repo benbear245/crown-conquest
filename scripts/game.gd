@@ -1,335 +1,364 @@
 extends Node2D
 
-# Root of the game scene. Owns the Simulation, drives it at fixed ticks,
-# tells the Map node to render dirty tiles, and routes input into the sim
-# or into the Camera2D (pan / zoom / tap).
+# Root of the game scene. Plays a match through a GameSession (local or
+# online), turns taps into commands, and hands match events to GameFeel
+# (banners, sounds, vibration, screen shake). Starting and joining matches
+# lives in PlayModes.
 
-const DRAG_THRESHOLD_PX: float = 8.0
-const ZOOM_STEP: float = 1.15
-const ZOOM_MIN_FACTOR: float = 0.6         # vs. fit-to-screen zoom
-const ZOOM_MAX_FACTOR: float = 6.0
-const LONG_PRESS_SEC: float = 0.4
+const SLOW_MO_SCALE: float = 0.35
+const SLOW_MO_REAL_SEC: float = 0.5
 
 @onready var _map: Map = $Map
+@onready var _overlay: MapOverlay = $MapOverlay
 @onready var _hud: HUD = $HUD
-@onready var _camera: Camera2D = $Camera2D
+@onready var _camera: CameraRig = $Camera2D
+@onready var _input: MapInput = $MapInput
+@onready var _audio: GameAudio = $Audio
+@onready var _modes: PlayModes = $PlayModes
 
-var _simulation: Simulation
-var _tick_accumulator: float = 0.0
-
-var _fit_zoom: float = 1.0
-
-var _pointer_down: bool = false
-var _pointer_dragged: bool = false
-var _pointer_press_pos: Vector2 = Vector2.ZERO
-var _pointer_down_time: float = 0.0
-var _long_press_fired: bool = false
-
-# Boat launch state: when set, the next tap on a target coast launches a boat.
-var _pending_boat_port: Vector2i = Vector2i(-1, -1)
-# Last wall tile painted during a drag, so we don't try to re-build the same tile.
-var _last_wall_drag_tile: Vector2i = Vector2i(-9999, -9999)
-
-var _prev_crown_alert: bool = false
+var _session: GameSession
+var _slow_mo_left: float = 0.0
+# Tap-target modes: "", "wall", "bombard", "boat", "crown_move".
+var _mode: String = ""
+var _boat_port: Vector2i = Vector2i(-1, -1)
+var _last_wall_tile: Vector2i = Vector2i(-1, -1)
+var _painting_walls: bool = false      # this drag started on your land in wall mode
+var _colorblind_shown: bool = false
+var _recorder: MatchRecorder
+var _tutorial: Tutorial
 
 
 func _ready() -> void:
-	_simulation = Simulation.new()
-	_simulation.start_default_match(_random_seed())
-	_map.setup(_simulation.state)
-	_hud.setup(_simulation)
-	_hud.new_map_pressed.connect(_on_new_map_pressed)
-	_hud.play_again_pressed.connect(_on_play_again_pressed)
-	_hud.jump_to_crown_pressed.connect(_on_jump_to_crown_pressed)
-	_hud.build_fort_requested.connect(_on_build_fort_requested)
-	_hud.upgrade_fort_requested.connect(_on_upgrade_fort_requested)
-	_hud.build_barracks_requested.connect(_on_build_barracks_requested)
-	_hud.build_port_requested.connect(_on_build_port_requested)
-	_hud.buy_keep_requested.connect(_on_buy_keep_requested)
-	_hud.wall_mode_toggled.connect(_on_wall_mode_toggled)
-	_hud.boat_launch_requested.connect(_on_boat_launch_requested)
-	_hud.ability_pressed.connect(_on_ability_pressed)
-	_hud.offer_truce_requested.connect(_on_offer_truce_requested)
-	_init_camera()
+	_input.tapped.connect(_on_tap)
+	_input.long_pressed.connect(_on_long_press)
+	_input.drag_started.connect(_on_drag_started)
+	_input.dragged.connect(_on_drag)
+	_input.pinched.connect(func(f: float, c: Vector2) -> void: _camera.zoom_by(f, c))
+	_input.wheel_zoomed.connect(func(f: float, p: Vector2) -> void: _camera.zoom_by(f, p))
+	_hud.command.connect(func(cmd: String, args: Array) -> void: _send(cmd, args))
+	_hud.crown_jump_requested.connect(_jump_home)
+	_hud.minimap_jump.connect(func(p: Vector2) -> void: _camera.jump_to(p))
+	_hud.ability_became_ready.connect(_on_ability_ready)
+	_hud.target_mode_requested.connect(_set_mode)
+	_hud.tutorial.next_pressed.connect(func() -> void:
+		if _tutorial != null:
+			_tutorial.press_next())
+	_hud.tutorial.skip_pressed.connect(func() -> void:
+		if _tutorial != null:
+			_tutorial.skipped = true
+			Profile.skip_tutorial()
+			_hud.tutorial.visible = false)
+	_hud.recap.leveled_up.connect(func(_level: int) -> void:
+		_audio.play("ability_ready")
+		Settings.vibrate(80))
+	_hud.menu_toggled.connect(func(open: bool) -> void:
+		if _session != null:
+			_session.paused = open)
+	_modes.session_changed.connect(_on_session_changed)
+	Settings.changed.connect(_on_settings_changed)
+	_colorblind_shown = Settings.colorblind
+	_modes.setup(_hud)
+
+
+func _on_session_changed(session: GameSession) -> void:
+	_session = session
+	_recorder = null
+	_tutorial = null
+	if _session != null:
+		_session.match_ready.connect(_on_match_ready)
+
+
+# A new match is ready to draw (local start, or the host's first update).
+func _on_match_ready() -> void:
+	var cur: Simulation = _session.sim()
+	Look.apply(cur.state)
+	_recorder = MatchRecorder.new(_session.setup, _session.online)
+	var is_tutorial: bool = _session.setup != null and _session.setup.mode == MatchSetup.MODE_TUTORIAL
+	_tutorial = Tutorial.new() if is_tutorial else null
+	_map.setup(cur.state)
+	_overlay.setup(cur.state, cur.local_player_id)
+	_hud.setup(cur, _map.texture())
+	_hud.menu.set_online(_session.online)
+	_camera.fit_world(_map.world_size())
+	_set_mode("", Vector2i.ZERO)
+	Engine.time_scale = 1.0
+	_audio.set_siege_music(false)
 
 
 func _process(delta: float) -> void:
-	_tick_accumulator += delta
-	var ticks_this_frame := 0
-	while _tick_accumulator >= Balance.TICK_DELTA and ticks_this_frame < 5:
-		_tick_accumulator -= Balance.TICK_DELTA
-		_simulation.advance_tick()
-		ticks_this_frame += 1
+	_update_slow_mo(delta)
+	if _session == null:
+		return
+	var events: Array = _session.update(delta)
+	if _session == null or _session.sim() == null:
+		return
+	for e: Dictionary in events:
+		GameFeel.handle(self, e)
+		if _recorder != null:
+			_recorder.on_event(_session.sim(), e)
+	_record()
+	_update_tutorial()
 	_map.render()
-	_hud.update_from_state()
-	_handle_crown_alert_vibration()
-	_check_long_press(delta)
+	_hud.update_from_state(_camera.visible_world_rect())
 
 
-func _check_long_press(delta: float) -> void:
-	if not _pointer_down or _pointer_dragged or _long_press_fired:
+# Feeds the recorder and, once the match is over for you, saves your
+# progress and fills in the recap.
+func _record() -> void:
+	if _recorder != null:
+		MatchProgress.record(_hud, _recorder, _tutorial, _session.sim())
+
+
+func _update_tutorial() -> void:
+	if _tutorial != null:
+		MatchProgress.show_tutorial(_hud, _camera, _tutorial, _session.sim())
+
+
+# Slow motion uses Engine.time_scale, so it is timed in real seconds.
+func _update_slow_mo(delta: float) -> void:
+	if _slow_mo_left <= 0.0:
 		return
-	_pointer_down_time += delta
-	if _pointer_down_time >= LONG_PRESS_SEC:
-		_long_press_fired = true
-		_handle_long_press(_pointer_press_pos)
+	_slow_mo_left -= delta / maxf(Engine.time_scale, 0.01)
+	if _slow_mo_left <= 0.0:
+		Engine.time_scale = 1.0
 
 
-func _handle_crown_alert_vibration() -> void:
-	var local: Player = _simulation.state.get_player(_simulation.local_player_id)
-	var active: bool = local != null and local.is_alive and local.crown_alert_until > _simulation.state.match_time
-	if active and not _prev_crown_alert:
-		Input.vibrate_handheld()
-	_prev_crown_alert = active
-
-
-# --- Input ------------------------------------------------------------------
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		_handle_mouse_button(event)
-	elif event is InputEventMouseMotion:
-		_handle_mouse_motion(event)
-	elif event is InputEventMagnifyGesture:
-		_zoom_by(event.factor)
-	elif event is InputEventScreenTouch:
-		var st: InputEventScreenTouch = event
-		if st.pressed:
-			_begin_pointer(st.position)
+func _notification(what: int) -> void:
+	# Android back button: close a panel, else open the menu, else (on the
+	# start screen) leave the app.
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and _hud != null:
+		if _hud.start_menu.visible:
+			if not _hud.start_menu.close_top():
+				get_tree().quit()
+		elif _hud.any_panel_open():
+			_hud.close_panels()
+			_hud.set_menu_open(false)
 		else:
-			_end_pointer(st.position)
-	elif event is InputEventScreenDrag:
-		var sd: InputEventScreenDrag = event
-		_handle_pointer_drag(sd.position, sd.relative)
-
-
-func _handle_mouse_button(event: InputEventMouseButton) -> void:
-	match event.button_index:
-		MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				_begin_pointer(event.position)
-			else:
-				_end_pointer(event.position)
-		MOUSE_BUTTON_WHEEL_UP:
-			if event.pressed:
-				_zoom_by(ZOOM_STEP)
-		MOUSE_BUTTON_WHEEL_DOWN:
-			if event.pressed:
-				_zoom_by(1.0 / ZOOM_STEP)
-
-
-func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
-	if _pointer_down:
-		_handle_pointer_drag(event.position, event.relative)
-
-
-func _begin_pointer(pos: Vector2) -> void:
-	_pointer_down = true
-	_pointer_dragged = false
-	_pointer_press_pos = pos
-	_pointer_down_time = 0.0
-	_long_press_fired = false
-	_last_wall_drag_tile = Vector2i(-9999, -9999)
-
-
-func _end_pointer(pos: Vector2) -> void:
-	if _pointer_down and not _pointer_dragged and not _long_press_fired:
-		_try_tap(pos)
-	_pointer_down = false
-	_pointer_dragged = false
-	_long_press_fired = false
-	_pointer_down_time = 0.0
-
-
-func _handle_pointer_drag(pos: Vector2, relative: Vector2) -> void:
-	if not _pointer_down:
+			_hud.set_menu_open(true)
 		return
-	if not _pointer_dragged and pos.distance_to(_pointer_press_pos) > DRAG_THRESHOLD_PX:
-		_pointer_dragged = true
-	if _pointer_dragged:
-		# Wall-drawing drag: build a wall at each new tile dragged over.
-		if _hud.wall_mode_active():
-			var tile: Vector2i = _screen_to_tile(pos)
-			if tile.x >= 0 and tile != _last_wall_drag_tile:
-				_last_wall_drag_tile = tile
-				_simulation.player_build_wall(_simulation.local_player_id, tile.x, tile.y)
+	# Pause (or, online, open the menu) when the app goes to the background.
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if _hud != null and _session != null and _session.sim() != null \
+				and _session.sim().state.phase == Balance.PHASE_MATCH:
+			_hud.set_menu_open(true)
+
+
+func _send(cmd: String, args: Array, on_result: Callable = Callable()) -> void:
+	if _session == null:
+		return
+	var rec: MatchRecorder = _recorder
+	_session.send(cmd, args, func(ok: bool) -> void:
+		if rec != null:
+			rec.on_command(cmd, args, ok)
+		if ok:
+			_audio.play("tap", -6.0)
+		if on_result.is_valid():
+			on_result.call(ok))
+
+
+# --- Input --------------------------------------------------------------------
+
+func _on_tap(screen_pos: Vector2) -> void:
+	if _session == null or _session.sim() == null or _hud.start_menu.visible:
+		return
+	if _hud.any_panel_open():
+		_hud.close_panels()
+		return
+	var cur: Simulation = _session.sim()
+	var state: GameState = cur.state
+	var tile: Vector2i = _screen_to_tile(screen_pos)
+	if state.phase == Balance.PHASE_PLACEMENT:
+		if tile.x >= 0:
+			_send("place_crown", [tile.x, tile.y], func(ok: bool) -> void:
+				if ok:
+					_hud.hints.done("place")
+					_jump_home())
+		return
+	if state.phase != Balance.PHASE_MATCH:
+		return
+	if tile.x < 0:
+		_set_mode("", Vector2i.ZERO)
+		return
+	var local: Player = state.get_player(cur.local_player_id)
+	if _mode != "":
+		# In wall mode, tapping anything but your own land ends wall mode and
+		# counts as a normal tap, so you can attack straight away.
+		if _mode != "wall" or (local != null and state.owners[state.idx(tile.x, tile.y)] == local.id):
+			_tap_in_mode(tile)
 			return
-		_camera.position -= relative / _camera.zoom.x
-		_clamp_camera()
+		_set_mode("", Vector2i.ZERO)
+	if local == null or not local.is_alive:
+		return
+	if local.crown_x >= 0 and absi(tile.x - local.crown_x) <= 1 and absi(tile.y - local.crown_y) <= 1:
+		_hud.keep_panel.visible = true
+		return
+	var radius: int = clampi(ceili(Balance.TAP_SNAP_PX / _camera.zoom.x), 1, Balance.TAP_SNAP_MAX_TILES)
+	_act_on(cur, local, TapTargets.resolve(state, local, tile, radius))
 
 
-func _handle_long_press(screen_pos: Vector2) -> void:
+# Grow toward, or attack, the tile a tap resolved to; explain any refusal.
+func _act_on(cur: Simulation, local: Player, target: Dictionary) -> void:
+	var t: Vector2i = target["tile"]
+	var world := Vector2(t.x + 0.5, t.y + 0.5)
+	var frac: float = _hud.send_fraction()
+	var action: String = target["action"]
+	if action == TapTargets.NONE:
+		_hud.banners.push_once("Tap free land to grow, or enemy land to attack", UI.COLOR_DIM, 2.0)
+		return
+	var why: String = TapTargets.expand_blocker(cur, local, frac) if action == TapTargets.EXPAND \
+		else TapTargets.attack_blocker(cur, local, int(target["owner"]), frac)
+	if why != "":
+		_overlay.add_ping(world, Color(0.75, 0.75, 0.75))
+		_hud.banners.push_once(why, UI.COLOR_WARN, 2.5)
+		return
+	_overlay.add_ping(world, UI.COLOR_GOOD if action == TapTargets.EXPAND else UI.COLOR_BAD)
+	_send(action, [t.x, t.y, frac], func(ok: bool) -> void:
+		if ok:
+			_audio.play(action)
+			_hud.hints.done(action))
+
+
+func _tap_in_mode(tile: Vector2i) -> void:
+	var cur: Simulation = _session.sim()
+	match _mode:
+		"wall":
+			_send("build_wall", [tile.x, tile.y])
+			return            # wall mode stays on until Done, or a tap off your land
+		"bombard":
+			_send("ability", [AbilitiesOps.ID_BOMBARD, tile.x, tile.y], func(ok: bool) -> void:
+				if not ok:
+					_hud.banners.push_text("Bombard target must be within %d tiles of your border" % Balance.BOMBARD_RANGE_TILES, UI.COLOR_WARN, 2.5))
+		"boat":
+			_send("launch_boat", [_boat_port.x, _boat_port.y, tile.x, tile.y, _hud.send_fraction()], func(ok: bool) -> void:
+				if not ok:
+					_hud.banners.push_text("No sea route there (max %d tiles of water)" % Balance.BOAT_RANGE_TILES, UI.COLOR_WARN, 2.5))
+		"crown_move":
+			var local: Player = cur.state.get_player(cur.local_player_id)
+			var why: String = MatchOps.crown_move_blocker(cur, local, tile.x, tile.y)
+			if why != "":
+				_hud.banners.push_text("Can't move there: %s" % why, UI.COLOR_WARN, 2.5)
+				return
+			_send("move_crown", [tile.x, tile.y])
+	_set_mode("", Vector2i.ZERO)
+
+
+func _on_long_press(screen_pos: Vector2) -> void:
+	if _session == null or _session.sim() == null:
+		return
+	var cur: Simulation = _session.sim()
+	var state: GameState = cur.state
 	var tile: Vector2i = _screen_to_tile(screen_pos)
-	if tile.x < 0:
+	if tile.x < 0 or state.phase != Balance.PHASE_MATCH or _mode != "":
 		return
-	if _simulation.state.phase != Balance.PHASE_MATCH:
+	var local: Player = state.get_player(cur.local_player_id)
+	if local == null or not local.is_alive:
 		return
-	var ti: int = _simulation.state.idx(tile.x, tile.y)
-	var owner: int = _simulation.state.owners[ti]
-	if owner == _simulation.local_player_id:
-		_hud.open_build_menu(tile.x, tile.y)
-	elif owner > 0 and owner != GameState.RUINS_OWNER_ID:
-		_hud.open_enemy_panel(owner)
+	_hud.close_panels()
+	var owner_id: int = state.owners[state.idx(tile.x, tile.y)]
+	Settings.vibrate(15)
+	if owner_id == local.id:
+		_hud.build_menu.open_at(cur, local, tile.x, tile.y)
+		_hud.hints.done("build")
+	elif state.is_player_owner(owner_id):
+		_hud.enemy_panel.open_for(owner_id)
+		_hud.hints.done("spy")
 
 
-func _try_tap(screen_pos: Vector2) -> void:
-	var tile: Vector2i = _screen_to_tile(screen_pos)
-	if tile.x < 0:
+# In wall mode a drag that starts on your own land paints walls; any other
+# drag moves the map as usual.
+func _on_drag_started(press_pos: Vector2) -> void:
+	_painting_walls = false
+	if _mode != "wall" or _session == null or _session.sim() == null:
 		return
-	if _simulation.state.players.is_empty():
+	var cur: Simulation = _session.sim()
+	var tile: Vector2i = _screen_to_tile(press_pos)
+	_painting_walls = tile.x >= 0 and cur.state.owners[cur.state.idx(tile.x, tile.y)] == cur.local_player_id
+
+
+func _on_drag(screen_pos: Vector2, relative: Vector2) -> void:
+	if _mode == "wall" and _painting_walls:
+		var tile: Vector2i = _screen_to_tile(screen_pos)
+		if tile.x >= 0 and tile != _last_wall_tile:
+			_last_wall_tile = tile
+			_send("build_wall", [tile.x, tile.y])
 		return
-	# Close menus if open — a tap outside dismisses them.
-	if _hud.is_build_menu_open():
-		_hud.close_build_menu()
-		return
-	if _hud.is_keep_panel_open():
-		_hud.close_keep_panel()
-		return
-	var local_id: int = _simulation.local_player_id
-	match _simulation.state.phase:
-		Balance.PHASE_PLACEMENT:
-			_simulation.player_place_crown(local_id, tile.x, tile.y)
-		Balance.PHASE_MATCH:
-			# Bombard target selection.
-			if _hud.is_bombard_target_mode():
-				_simulation.player_activate_bombard(local_id, tile.x, tile.y)
-				_hud.set_bombard_target_mode(false)
-				return
-			# Boat landing selection.
-			if _pending_boat_port.x >= 0:
-				var frac := _hud.send_fraction()
-				_simulation.player_launch_boat(local_id, _pending_boat_port.x, _pending_boat_port.y, tile.x, tile.y, frac)
-				_pending_boat_port = Vector2i(-1, -1)
-				return
-			# Wall mode: tap on own land builds one wall tile.
-			if _hud.wall_mode_active():
-				_simulation.player_build_wall(local_id, tile.x, tile.y)
-				return
-			# Tap on our own Crown centre opens Keep panel.
-			var local: Player = _simulation.state.get_player(local_id)
-			if local != null and local.crown_x >= 0:
-				var ccx: int = local.crown_x
-				var ccy: int = local.crown_y
-				if abs(tile.x - ccx) <= 1 and abs(tile.y - ccy) <= 1:
-					_hud.open_keep_panel()
-					return
-			var target_owner: int = _simulation.state.owners[_simulation.state.idx(tile.x, tile.y)]
-			var frac: float = _hud.send_fraction()
-			if target_owner == 0 or target_owner == GameState.RUINS_OWNER_ID:
-				_simulation.player_expand(local_id, tile.x, tile.y, frac)
-			elif target_owner != local_id:
-				_simulation.player_attack(local_id, tile.x, tile.y, frac)
+	_camera.pan_screen(relative)
 
 
 func _screen_to_tile(screen_pos: Vector2) -> Vector2i:
-	var world := get_canvas_transform().affine_inverse() * screen_pos
-	var w: int = _simulation.state.width
-	var h: int = _simulation.state.height
-	if world.x < 0.0 or world.y < 0.0 or world.x >= float(w) or world.y >= float(h):
+	var state: GameState = _session.sim().state
+	var world := _camera.screen_to_world(screen_pos)
+	if world.x < 0.0 or world.y < 0.0 or world.x >= float(state.width) or world.y >= float(state.height):
 		return Vector2i(-1, -1)
 	return Vector2i(int(world.x), int(world.y))
 
 
-# --- Camera -----------------------------------------------------------------
-
-func _init_camera() -> void:
-	var world := _map.world_size()
-	_camera.position = world * 0.5
-	var vp := get_viewport_rect().size
-	_fit_zoom = minf(vp.x / world.x, vp.y / world.y)
-	_camera.zoom = Vector2(_fit_zoom, _fit_zoom)
-
-
-func _zoom_by(factor: float) -> void:
-	var cur: float = _camera.zoom.x
-	var new_zoom: float = clampf(cur * factor, _fit_zoom * ZOOM_MIN_FACTOR, _fit_zoom * ZOOM_MAX_FACTOR)
-	_camera.zoom = Vector2(new_zoom, new_zoom)
-	_clamp_camera()
-
-
-func _clamp_camera() -> void:
-	var world := _map.world_size()
-	var vp := get_viewport_rect().size
-	var half := (vp / _camera.zoom.x) * 0.5
-	var min_x: float = minf(half.x, world.x * 0.5)
-	var max_x: float = maxf(world.x - half.x, world.x * 0.5)
-	var min_y: float = minf(half.y, world.y * 0.5)
-	var max_y: float = maxf(world.y - half.y, world.y * 0.5)
-	_camera.position.x = clampf(_camera.position.x, min_x, max_x)
-	_camera.position.y = clampf(_camera.position.y, min_y, max_y)
+func _set_mode(mode: String, data: Vector2i) -> void:
+	# Pressing wall mode again turns it off.
+	if mode == "wall" and _mode == "wall":
+		mode = ""
+	_mode = mode
+	_boat_port = data if mode == "boat" else Vector2i(-1, -1)
+	_last_wall_tile = Vector2i(-1, -1)
+	match mode:
+		"wall":
+			_hud.set_mode_text("Wall mode — tap or drag your land. Tap enemy or free land to go back to fighting.")
+		"bombard":
+			_hud.set_mode_text("Bombard — tap a target within %d tiles of your border" % Balance.BOMBARD_RANGE_TILES)
+		"boat":
+			_hud.set_mode_text("Boat — tap a coast across the water")
+		"crown_move":
+			_hud.set_mode_text("Move Crown — tap your own land %d+ tiles from any enemy" % Balance.CROWN_MOVE_MIN_DIST_FROM_ENEMY)
+		_:
+			_hud.set_mode_text("")
 
 
-# --- Debug ------------------------------------------------------------------
-
-func _on_new_map_pressed() -> void:
-	_start_new_match()
-
-
-func _on_play_again_pressed() -> void:
-	_start_new_match()
-
-
-func _on_jump_to_crown_pressed() -> void:
-	var local: Player = _simulation.state.get_player(_simulation.local_player_id)
-	if local == null or local.crown_x < 0:
+func _jump_home() -> void:
+	if _session == null or _session.sim() == null:
 		return
-	_camera.position = Vector2(float(local.crown_x) + 0.5, float(local.crown_y) + 0.5)
-	_clamp_camera()
+	var cur: Simulation = _session.sim()
+	var local: Player = cur.state.get_player(cur.local_player_id)
+	if local != null and local.crown_x >= 0:
+		_camera.jump_to(Vector2(local.crown_x + 0.5, local.crown_y + 0.5))
 
 
-func _start_new_match() -> void:
-	var next_seed := _random_seed()
-	_simulation.start_match(_simulation.size_preset, _simulation.map_type, next_seed)
-	_map.setup(_simulation.state)
-	_hud.reset_overlay_dismissal()
-	_prev_crown_alert = false
-	_init_camera()
+func _on_ability_ready(_ability_id: int) -> void:
+	_audio.play("ability_ready", -4.0)
+	Settings.vibrate(30)
 
 
-func _random_seed() -> int:
-	return int(Time.get_unix_time_from_system() * 1000.0) ^ randi()
+func _on_settings_changed() -> void:
+	if Settings.colorblind != _colorblind_shown:
+		_colorblind_shown = Settings.colorblind
+		if _session != null and _session.sim() != null:
+			Look.apply(_session.sim().state)
+			_map.repaint_all()
 
 
-# --- HUD signal handlers for buildings and Keep ------------------------------
-
-func _on_build_fort_requested(x: int, y: int) -> void:
-	_simulation.player_build_fort(_simulation.local_player_id, x, y)
-
-
-func _on_upgrade_fort_requested(x: int, y: int) -> void:
-	_simulation.player_upgrade_fort(_simulation.local_player_id, x, y)
+# Small accessors GameFeel uses (keeps that file free of node paths).
+func sim() -> Simulation:
+	return _session.sim()
 
 
-func _on_build_barracks_requested(x: int, y: int) -> void:
-	_simulation.player_build_barracks(_simulation.local_player_id, x, y)
+func hud() -> HUD:
+	return _hud
 
 
-func _on_build_port_requested(x: int, y: int) -> void:
-	_simulation.player_build_port(_simulation.local_player_id, x, y)
+func audio() -> GameAudio:
+	return _audio
 
 
-func _on_buy_keep_requested(level: int) -> void:
-	_simulation.player_buy_keep(_simulation.local_player_id, level)
-	_hud.open_keep_panel()
+func camera() -> CameraRig:
+	return _camera
 
 
-func _on_wall_mode_toggled(_enabled: bool) -> void:
-	# Nothing extra to do; game.gd checks _hud.wall_mode_active() per tap.
-	pass
+func overlay() -> MapOverlay:
+	return _overlay
 
 
-func _on_boat_launch_requested(port_x: int, port_y: int) -> void:
-	_pending_boat_port = Vector2i(port_x, port_y)
-
-
-func _on_ability_pressed(ability_id: int) -> void:
-	var pid: int = _simulation.local_player_id
-	match ability_id:
-		AbilitiesOps.ID_SWIFT_MARCH:
-			_simulation.player_activate_swift_march(pid)
-		AbilitiesOps.ID_CROWN_SHIELD:
-			_simulation.player_activate_crown_shield(pid)
-		AbilitiesOps.ID_RALLY:
-			_simulation.player_activate_rally(pid)
-		AbilitiesOps.ID_BOMBARD:
-			_hud.set_bombard_target_mode(true)
+# Slow motion only offline: online, the match keeps running on the host.
+func start_slow_mo() -> void:
+	if _session != null and _session.online:
+		return
+	Engine.time_scale = SLOW_MO_SCALE
+	_slow_mo_left = SLOW_MO_REAL_SEC

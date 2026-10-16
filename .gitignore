@@ -16,3 +16,9 @@
 *.tmp
 .DS_Store
 Thumbs.db
+
+# Signing keys never go in git
+*.p12
+*.keystore
+*.jks
+signing-key/

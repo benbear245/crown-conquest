@@ -225,3 +225,188 @@ With Prompt 5–6 bots on this build, every match runs to the 15:00 time limit �
 - Press Rally while a bot of yours is running — their per-tile cost drops by 30 % for 10 s. The attack row's troop remainder visibly drains more slowly.
 - Press Bombard, then tap an enemy spot within 20 tiles of your border. A dark cracked overlay appears for 12 s, enemy tiles inside the area lose 2 troops/sec, and attacking into the area pays half the extra defense.
 - Hard bots eventually fire Bombard on your Crown; Normal bots will drop Swift March opening the match.
+
+## Prompt 10 follow-up: fixes
+
+**Built**
+- The "Fair play and truces" commit left `game.gd` calling a handler that didn't exist, so the game didn't load. Fixed.
+- Attacks that couldn't afford a single tile used to sit forever and block one of the 3 attack slots. A stalled attack now pulls back on its own (75% returned, like a retreat).
+- Bot truce logic read the wrong player's Oathbreaker flag; fixed so bots refuse truces from Oathbreakers, as designed.
+- Default skirmish bots are now Mixed (3 Easy, 3 Normal, 1 Hard) instead of all Easy.
+
+## Code layout
+
+`simulation.gd` (950 lines) and `hud.gd` (1,170 lines) were split so every script is under 400 lines:
+- Sim rules: `territory_ops.gd` (claiming, borders, expansion), `combat_ops.gd` (attacks, tile cost, defense), `match_ops.gd` (placement, Crown move, elimination, winning), `buildings_ops.gd`, `abilities_ops.gd`, `truces_ops.gd`, `intel_ops.gd` (spying), `shrines_ops.gd`, `boats_ops.gd`. `simulation.gd` is now the tick loop plus one command method per player action.
+- The sim reports what happened through `state.events` (Crown fell, loot, Shrine taken, spy caught, truce offer…); `game_feel.gd` turns those into banners, sounds, vibration and shake. Headless runs skip events entirely.
+- Screen side: `game.gd` (tick loop, taps → commands), `map_input.gd` (tap / long-press / drag / pinch), `camera_rig.gd`, `map.gd` (tile texture), `map_overlay.gd` (fronts, icons, floating numbers), `audio.gd`, `settings.gd` (autoload), and the HUD in `scripts/ui/` (one script per panel).
+
+## Prompt 11: Smarter bots
+
+**Built**
+- `bots.gd`, `bot_build.gd`, `bot_tactics.gd`: each think, a bot lists its possible moves (expand, attack each neighbour, build, spy, offer a truce, wait), scores them by personality and situation, and does the best one. Easy bots make a random move 20% of the time, Normal 8%, Hard never.
+- Difficulty follows the design table (think speed, send amounts, what they may use). Easy bots back off before reaching a human's Crown zone before 4:00. Hard bots retreat from attacks that can't pay for their front, combine Bombard + Rally, move their Crown when it's under attack, and use Ports and boats.
+- Normal bots keep 20% of their troop cap at home and Hard bots 40%, so they defend and keep the growth interest. Before this, Hard bots spent down to zero and won only 3% of matches.
+- Bots judge rivals only through `IntelOps` (strength band, Scout and Spy), never their real troop counts.
+
+**Simulator** (Medium Continent, 8 bots, Mixed, 50 matches, after the balance changes below)
+| Check | Target | Result |
+| --- | --- | --- |
+| Median match length | 7–11 min | 8:06 ✅ |
+| Wins per personality | ≤ 35% | Expander 38%, Raider 28%, Turtle 18%, Opportunist 16% ❌ (close) |
+| Land leader at 3:00 wins | < 55% | 44% ✅ |
+| Decided by the 15:00 limit | < 5% | 14% ❌ |
+| Crowns captured per match | ≥ 5 | 5.4 ✅ |
+| Every feature used in ≥ 30% of matches | ≥ 30% | Boats 2%, Sabotage 10%, Keep 3 14%, Walls 16% ❌ |
+| 1 Hard vs 7 Easy (`--mix hard1`, 30 matches) | Hard ≥ 40% | 57% ✅ |
+
+Wins by difficulty: Easy 8%, Normal 54%, Hard 38% (3 Easy, 4 Normal and 1 Hard bot per match, so per bot Hard wins most). Full report: `reports/balance_2026-10-07.md`. Results move by ±5–8 points between 50-match runs, so the three misses are for the Prompt 17 balance pass.
+
+**Balance numbers changed** (also in DESIGN.md "Balance changes"): attack tile base cost 2 → 5, Rising Empire discount 15% → 25%, Empire upkeep over 35% −30% → −45%. Before them, matches ended in about 4 minutes once bots fought properly.
+
+## Crown move
+
+Tap ♛ Crown → Move Crown, then tap your own land. Once per match from 3:00, costs 20% of your troops, the 3×3 spot must be your land and 10+ tiles from any enemy. For 5 seconds your Crown has no special defense (shown as a dashed line to the new spot); if the new spot is lost in that time the move fails.
+
+## Spy system
+
+See "Spying" in `docs/DESIGN.md`. Rival troops are hidden behind a strength band; Scout, Spy, Sabotage and Steal plans are in the rival's panel (long-press their land) with cost, catch chance and any lock shown on each button. Watchtowers are a new building; Disinformation is in the Crown menu.
+
+**What to check**
+- Long-press a rival: you see "Troops: unknown — Stronger than you" until you Scout. After a Scout you see a range; after a Spy, exact numbers and their buildings.
+- Spy on a bot repeatedly: about one in four gets caught and the banner names you.
+- Build a Watchtower near a rival: their troops show as a range without paying.
+- Turn on Disinformation → Look weak, then watch whether neighbouring bots start attacking you.
+
+## Shrines
+
+See "Shrines" in `docs/DESIGN.md`. Pale 3×3 sanctums with a coloured diamond (green Plenty, red War, blue Sight), also on the minimap. The holder's colour shows as a dot in the diamond and a ◆ next to their name on the leaderboard; your own blessing is listed under the troop bar.
+
+## Prompt 12: Mobile UI
+
+**Built**
+- Layout with anchors only: top bar (troop bar with the sweet-spot band marked, troops/s, land %, timer, Menu), leaderboard (top 5 plus your own row), banner queue under the top bar (max 3, never over the controls), attack list, minimap (tap or drag to move the camera), ability bar, and the bottom bar (♛ Crown button, send slider, 25/50/75/100%).
+- ♛ Crown: tap for the Crown menu, double-tap to jump home. The Crown-under-attack banner also jumps home.
+- Taps come only from mouse events (Godot turns the first finger into a mouse), pinch from raw touches, so a tap is never handled twice. Long-press is 0.45 s and cancelled by a drag or a second finger.
+- First-time hints for placing, expanding, the sweet spot, attacking, building, spying, Shrines and the Crown menu. Each shows once; "Show tips again" in the menu resets them.
+- Left-handed layout mirrors the side panels and the bottom bar. Panels are modal: banners and tips step aside while one is open.
+- Checked by screenshot at 1920×1080 and 2400×1080, both hands.
+
+## Prompt 13: Game feel, sound and vibration
+
+**Built**
+- Pulsing attack fronts (yours brighter), Crown icons that flash red under attack, Crown Shield ring, boats, Shrine glow.
+- Crown falls: screen shake, a 0.5 s slow-motion moment and the fanfare when it's yours or you took it; a smaller shake otherwise. Floating "+N plunder" and "+N loot".
+- Vibration for Crown under attack, Crown falls, ability ready and long-press, all behind the vibration setting.
+- Placeholder sounds and two music loops in `assets/audio/` (replace the files, keep the names). Music switches to the intense track in the Final Siege.
+- Menu (pauses the match): Resume, New map, sound, music, vibration, colour-blind palette, left-handed layout. Saved to `user://settings.cfg`. The match also pauses when the app goes to the background.
+
+## Multiplayer, step 1 and 2: online play on one device and on Wi-Fi
+
+**Built**
+- `scripts/sim/command_router.gd`: every player action is a named command with checked arguments. Local play and online play both go through it.
+- `scripts/net/`:
+  - `match_server.gd` runs an online match (lobby, seats, the real Simulation, commands in, updates out) without knowing about sockets.
+  - `snapshot.gd` builds each player's personal update (changed tiles, public player info, your own full record, and rivals only as `IntelOps` allows) and decides which events each player hears about. Someone you spy on learns they're watched, not by whom.
+  - `mirror.gd` keeps a read-only copy of the match on a joining phone, so the existing map and HUD draw it unchanged.
+  - `net_host.gd` hosts a match over ENet (UDP) and/or a loopback link; `enet_link.gd` and `loopback_link.gd` are the two kinds of connection; `protocol.gd` is the message format (Godot variants, zstd for big messages, size-checked).
+  - `local_session.gd` / `net_session.gd`: the game scene plays through either one the same way.
+  - `dedicated_server.gd` + `scenes/server.tscn`: headless server, `godot --headless --path . res://scenes/server.tscn -- --port 24680`.
+- `scripts/play_modes.gd` + start menu (`scripts/ui/hud_start_menu.gd`): Play vs bots, Practice online (this device), Host a game on this Wi-Fi (shows your address), Join by address, and the lobby. Your name and the last address are remembered.
+- Online: the menu says "match keeps running" and "New map" becomes "Leave match"; no slow motion.
+
+**Tested**
+- Host plus two network clients on one machine: after 130 s the clients' copy of the map matched the server exactly (0 of 24,000 tiles, all buildings); a rival's troops arrived only as a strength band until a Spy succeeded, then exact; a caught spy revealed nothing; malformed commands were refused; a disconnect handed the empire to a bot.
+- Data: full update 3.5 KB at the start, then about 11 KB/s on average (12-minute bot match). Attack fronts are sent every other tick and capture flashes are left to the phones to keep this down.
+- The server runs a whole 12-minute match's rules in about 14 seconds of CPU, so one core could host many matches.
+
+**What to check**
+- Practice online: plays exactly like vs bots, but through the network code.
+- Two phones on the same Wi-Fi: one taps "Host a game on this Wi-Fi" and reads out the address; the other types it and taps Join; the host taps Start. Bots fill the other seats.
+- Close the app on the joining phone mid-match: the host sees "... left — a bot takes over their empire". Reopen and join with the same name to take it back.
+
+**Not done yet**
+- Internet play: needs a dedicated server rented somewhere, and its address in the app (or a lobby service).
+- Android export will need the INTERNET permission when export is set up (Prompt 18).
+- Further data savings: send player info less often, and only fronts that changed.
+
+## Test build v0.1.0
+
+**Bug sweep**
+- Six full matches (3 vs bots, 3 practice online) were played through the real game screens with random taps, long-presses, panels and commands (including invalid ones), ending with the end screen and "Play again". No script errors or warnings.
+- All 60 scripts load with no errors or warnings; the exported Linux build starts with no errors.
+
+**Added for testers**
+- Version shown on the start screen and in the menu ("Test build v0.1.0"), set in `project.godot`.
+- **How to play** on the start screen.
+- **Menu → Report a problem** copies device details, the error count and the last 120 log lines (`scripts/bug_report.gd`, a Godot Logger) so testers can paste them into a message. File logging is also on.
+- Android back button: closes a panel, otherwise opens the menu; on the start screen it leaves the app.
+- Android permissions for online play (Internet, network and Wi-Fi state) plus vibration.
+
+**Builds** (`export_presets.cfg`, see `docs/BUILDING.md`)
+- Android: `CrownConquest-v0.1.0.apk`, 27 MB, arm64, Android 7+, signed with APK Signature Scheme v2 and verified.
+- Windows: `CrownConquest-v0.1.0-windows.7z` (one .exe plus the tester guide; 7z to stay under 30 MB).
+- Linux: `CrownConquest.x86_64`.
+- Tester instructions: `docs/TESTER_GUIDE.md`.
+
+**Not tested here:** the APK on a real phone (no Android device or emulator available) and the Windows build on Windows.
+
+## v0.2.0: Match setup, progression, looks, daily play and tutorial
+
+**Match setup and Quick play**
+- New start menu (`scripts/ui/hud_start_menu.gd`): your level bar, a big Quick play button showing your last setup, Play vs bots, Daily Challenge (with today's map type and best score), Tutorial, Customize, Progress, today's challenges and the Online section.
+- Match setup screen (`menu_setup_panel.gd`): map size, map type, number of bots and difficulty (Mixed or one level for all). `MatchSetup` (`scripts/sim/match_setup.gd`) carries these to `Simulation.start_with()` and, when hosting online, to the server.
+- Bot names are now generated from the match seed (`BotNames`).
+
+**Recap, XP and levels**
+- `MatchRecorder` watches the match from your side (land every 5 s, best moments, Crowns, Shrines, spies, truces, Forts, Walls, Ports, Bombards) and builds a summary when the match ends or your Crown falls.
+- `Profile` autoload saves XP, stats, achievements, looks, the last setup, daily challenge progress and Daily scores to `user://profile.json` (written to a temp file, then renamed).
+- Recap screen (`hud_recap.gd`): land graph, best moment, XP lines, animated level bar with a level-up moment, unlocks, achievements, challenges and Daily score.
+
+**Looks and achievements**
+- `Cosmetics` catalogue and unlock levels; `Look` draws chosen colours (with clash swapping), 6 patterns and 8 Crown icons on the map; titles show when rivals are inspected and on the recap; victory effects (Fireworks, Confetti, Golden Rain) play for the winner.
+- Customize screen with a live preview; Progress screen with stats, challenges and a 16-trophy shelf.
+- Online: looks travel in the hello message, are checked by the server and are shown to everyone. Protocol version 2 (older builds can't join).
+
+**Daily play**
+- 3 daily challenges from an 11-challenge pool, the same for everyone each day, +150 XP each.
+- Daily Challenge map: same seed and settings for everyone by date; score and best saved.
+
+**Tutorial**
+- Guided match against 1 passive Easy bot with a 0:30 peace; 8 steps with an arrow and Skip. +250 XP and the Graduate title the first time.
+
+**Tested**
+- Seven full matches through the real screens (Quick play, Daily, tutorial, Small vs Hard, Large Archipelago with 11 bots, two practice online): every one ended with the recap shown and progress saved.
+- A scripted player finished all 8 tutorial steps and won (2:16, +350 XP).
+- Balance simulator (6 matches) and the online data test still run as before. No script errors or warnings (LSP check: 0 diagnostics).
+
+## v0.2.1: Friendlier home screen
+
+- The home screen fills the whole display with three cards: **Play vs bots** (a big gold Quick play button, the current setup, your record or a tip, "Change map and bots"), **Daily Challenge** (today's map, your best score, today's challenges) and **Play with friends** (Host, Join, and three steps explaining how it works).
+- New players see a welcome banner with "Start tutorial" / "Not now", and the Tutorial button is marked NEW. Red text is now only used for real errors.
+- Pop-ups instead of crowded inline sections: How to play (rules in six short rows, plus a tutorial shortcut), Settings (sound, music, vibration, colour-blind, left-handed, tips, report a problem — reachable before a match now) and the lobby (the host's address shown large so it's easy to read out).
+- The join address box only appears after tapping "Join a game"; pressing Enter joins.
+- Consistent buttons: one gold button for the main action on each screen, outlined buttons for everything else.
+- Android back button closes the top pop-up or screen before leaving the app; in the lobby it leaves the lobby.
+- Checked at 16:9, 20:9 and 4:3 screen shapes; soak test (Quick play, online practice, tutorial) passes; 0 script warnings.
+
+## v0.2.2: Smoother growing and attacking
+
+**Bug fixed: "after building walls I can't attack."** Wall mode stayed on after building, so every later tap tried to build a wall on enemy land (and failed silently), and dragging built walls instead of moving the map. Now:
+- Tapping enemy or free land in Wall mode leaves it and attacks or grows straight away.
+- A drag only paints walls if it starts on your own land; otherwise it moves the map.
+- Every targeting mode shows a bar with a **Done** button.
+
+**Easier on a phone**
+- Taps snap: tapping your own land or water near the border picks the nearest enemy or free tile within finger reach (`TapTargets`, `Balance.TAP_SNAP_PX`).
+- Each tap shows a ring (green grow, red attack, grey refused), and refused taps say why: peace, not enough troops, no shared border, or all attack slots in use. Repeated messages don't stack.
+
+**Better growing and attacking (rules)**
+- Growth heads toward where you tap: each ring claims the half of your free frontier nearest the tapped spot (`Balance.EXPAND_AIM_RING_SHARE`). Any free tile can be tapped, not only ones touching your border.
+- Attacks push toward the tapped spot when troops can't cover the whole front.
+- Tapping a player you're already attacking reinforces that attack instead of needing a new slot.
+- Bots use the same rules. Balance check (20 simulated matches): average 7:48 per match, 1 of 20 went to the 15:00 limit (before: about 1 in 4).
+
+**Tested:** a scripted player drove the real tap handler: a wall built in Wall mode, then a tap on the enemy left Wall mode and attacked; a second tap reinforced it (2,498 → 3,747 troops); a tap on own land beside the enemy snapped to an attack; drags from enemy land panned and drags from own land painted walls; aimed growth put 121 of 123 new tiles on the tapped side. Soak test and online tests pass; 0 script warnings.
+
+`game.gd` was getting long, so the recap and tutorial upkeep moved to `scripts/match_progress.gd`.
